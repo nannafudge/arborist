@@ -1,3 +1,4 @@
 pub enum FenwickTreeError {
-    OutOfBounds(usize, usize)
+    OutOfBounds{index: usize, tree_len: usize},
+    InvalidNodeSide(NodeSide)
 }

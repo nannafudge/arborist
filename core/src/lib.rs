@@ -12,6 +12,12 @@ mod macros {
                 _ => $default
             }
         };
+        ($var:expr, $default:expr, $( $arm:pat => $body:expr ),+) => {
+            match $var {
+                $($arm => $body,)+
+                _ => $default
+            }
+        };
     }
 }
 
@@ -22,11 +28,13 @@ mod macros {
 //TODO: Create safe & tested interface around these enforcing use of Pin
 #[inline(always)]
 pub(crate) unsafe fn const_time_select<T: Unpin + Sized>(a: *const T, b: *const T, selector: usize) -> *const T {
+    assert!(selector < 2); // TODO: Create Selector type to artifically constrain (or only accept bool)
     a.offset(b.offset_from(a) * (selector & 0x1) as isize)
 }
 
 #[inline(always)]
 pub(crate) unsafe fn const_time_select_mut<T: Unpin + Sized>(a: *mut T, b: *mut T, selector: usize) -> *mut T {
+    assert!(selector < 2);
     a.offset(b.offset_from(a) * (selector & 0x1) as isize)
 }
 
@@ -62,12 +70,12 @@ pub trait TreeWalker<T: Tree> {
     type Path;
 
     // Traversal methods
-    fn up(&mut self) -> &T::Value;
-    fn down(&mut self, side: NodeSide) -> &T::Value;
-    fn seek(&mut self, path: Self::Path) -> &T::Value;
+    fn up(&mut self) -> Result<&T::Value, T::Error>;
+    fn down(&mut self, side: NodeSide) -> Result<&T::Value, T::Error>;
+    fn seek(&mut self, path: Self::Path) -> Result<&T::Value, T::Error>;
     fn reset(&mut self);
     // Node-related methods
-    fn sibling(&self) -> &T::Value;
+    fn sibling(&self) -> Result<&T::Value, T::Error>;
     fn type_(&self) -> NodeType;
     fn side(&self) -> NodeSide;
 }
