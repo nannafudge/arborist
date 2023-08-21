@@ -12,7 +12,7 @@ macro_rules! impl_op {
 macro_rules! impl_op_assign {
     ($fn:ident, $op:tt, $rhs:ty) => {
         fn $fn(&mut self, rhs: $rhs) {
-            self.index = self.index $op rhs;
+            self.index $op rhs;
             self.lsb = lsb(self.index);
         }
     };

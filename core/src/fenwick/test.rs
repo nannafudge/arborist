@@ -9,11 +9,11 @@ impl Tree for [usize] {
         todo!()
     }
 
-    fn get(&self, key: &Self::Key) -> Result<&Self::Value, Self::Error> {
+    fn get(&self, _key: &Self::Key) -> Result<&Self::Value, Self::Error> {
         todo!()
     }
 
-    fn contains(&self, key: &Self::Key) -> Result<&Self::Value, Self::Error> {
+    fn contains(&self, _key: &Self::Key) -> Result<&Self::Value, Self::Error> {
         todo!()
     }
 }

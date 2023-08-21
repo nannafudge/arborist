@@ -2,17 +2,17 @@
 pub mod macros;
 pub mod errors;
 
-// Test trait impls (otherwise E0117)
+mod test;
 #[cfg(test)]
-pub mod test;
+pub use test::*;
 
 use arborist_proc::impl_length;
 
 pub use crate::fenwick::errors::*;
 use crate::{
     Tree, TreeWalker,
-    Node, NodeSide, NodeType,
-    unwrap_enum, const_time_select, const_time_select_mut
+    NodeSide, NodeType,
+    const_time_select, const_time_select_mut
 };
 
 use core::ops::{
@@ -20,8 +20,7 @@ use core::ops::{
     BitOr, BitOrAssign,
     BitXor, BitXorAssign,
     BitAnd, BitAndAssign,
-    Add, AddAssign,
-    Sub, SubAssign,
+    AddAssign, SubAssign,
 };
 
 /*################################
@@ -48,9 +47,10 @@ pub trait Length {
 pub trait IndexedCollection: Index<usize> + Length {}
 pub trait IndexedCollectionMut: IndexMut<usize> + IndexedCollection {}
 
-impl<C> IndexedCollection for C where C: Index<usize> + Length {}
+impl<C> IndexedCollection for C where C: Index<usize> + Length + ?Sized {}
 impl<C> IndexedCollectionMut for C where C: IndexMut<usize> + IndexedCollection {}
 
+impl_length!(<T>, [T]);
 impl_length!(<T>, &[T]);
 impl_length!(<T>, &mut [T]);
 impl_length!(<T>, Vec<T>);
@@ -58,9 +58,10 @@ impl_length!(<T>, Vec<T>);
 /*################################
             Index View
 ################################*/
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct FenwickIndexView {
-    index: usize,
-    lsb: usize
+    pub index: usize,
+    pub lsb: usize
 }
 
 impl FenwickIndexView {
@@ -80,44 +81,44 @@ impl FenwickIndexView {
     }
 }
 
-impl<R> BitOr<R> for FenwickIndexView where usize: BitOr<R> {
-    impl_op!{bitor, |, R}
+impl BitOr<usize> for FenwickIndexView {
+    impl_op!{bitor, |, usize}
 }
-impl<R> BitOrAssign<R> for FenwickIndexView where usize: BitOr<R> {
-    impl_op_assign!{bitor_assign, |, R}
+impl BitOrAssign<usize> for FenwickIndexView {
+    impl_op_assign!{bitor_assign, |=, usize}
 }
-impl<R> BitXor<R> for FenwickIndexView where usize: BitXor<R> {
-    impl_op!{bitxor, ^, R}
+impl BitXor<usize> for FenwickIndexView {
+    impl_op!{bitxor, ^, usize}
 }
-impl<R> BitXorAssign<R> for FenwickIndexView where usize: BitXor<R> {
-    impl_op_assign!{bitxor_assign, ^, R}
+impl BitXorAssign<usize> for FenwickIndexView {
+    impl_op_assign!{bitxor_assign, ^=, usize}
 }
-impl<R> BitAnd<R> for FenwickIndexView where usize: BitAnd<R> {
-    impl_op!{bitand, &, R}
+impl BitAnd<usize> for FenwickIndexView {
+    impl_op!{bitand, &, usize}
 }
-impl<R> BitAndAssign<R> for FenwickIndexView where usize: BitAnd<R> {
-    impl_op_assign!{bitand_assign, &, R}
+impl BitAndAssign<usize> for FenwickIndexView {
+    impl_op_assign!{bitand_assign, &=, usize}
 }
-impl<R> AddAssign<R> for FenwickIndexView where usize: Add<R> {
-    impl_op_assign!{add_assign, +, R}
+impl AddAssign<usize> for FenwickIndexView {
+    impl_op_assign!{add_assign, +=, usize}
 }
-impl<R> SubAssign<R> for FenwickIndexView where usize: Sub<R> {
-    impl_op_assign!{sub_assign, -, R}
+impl SubAssign<usize> for FenwickIndexView {
+    impl_op_assign!{sub_assign, -=, usize}
 }
 
 /*################################
             Tree View
 ################################*/
 
-pub struct FenwickTreeView<'tree, C> {
+pub struct FenwickTreeView<'tree, C: ?Sized> {
     tree: &'tree C,
-    view: FenwickIndexView
+    pub view: FenwickIndexView
 }
 
 impl<'tree, C> FenwickTreeView<'tree, C> where
-    C: IndexedCollection + Tree<Value = C::Output>
+    C: ?Sized + IndexedCollection + Tree<Value = C::Output> 
 {
-    fn new(tree: &'tree C, index: usize) -> FenwickTreeView<C> {
+    pub fn new(tree: &'tree C, index: usize) -> FenwickTreeView<C> {
         Self {
             tree: tree,
             view: FenwickIndexView::new(index)
@@ -130,7 +131,7 @@ impl<'tree, C> FenwickTreeView<'tree, C> where
 ################################*/
 
 impl<'tree, C> TreeWalker<C> for FenwickTreeView<'tree, C> where
-    C: IndexedCollection + Tree<Value = C::Output, Error = FenwickTreeError>
+    C: ?Sized + IndexedCollection + Tree<Value = C::Output, Error = FenwickTreeError>
 {
     type Path = usize;
 

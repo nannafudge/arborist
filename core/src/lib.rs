@@ -66,7 +66,7 @@ pub trait TreeMut: Tree {
 }
 
 // Generic defined to tightly bind Walkers to their respective Tree declarations
-pub trait TreeWalker<T: Tree> {
+pub trait TreeWalker<T: Tree + ?Sized> {
     type Path;
 
     // Traversal methods

@@ -1,15 +1,12 @@
-use forest_rs::{
-    Tree, TreeWalker, Node, NodeSide, NodeType,
-    fenwick::{FenwickTreeError, FenwickTreeView}
-};
+use arborist_core::TreeWalker;
+use arborist_core::fenwick::*;
 
 #[test]
 fn basic() {
-    let collection: [Node<usize>; 3] = [
-        Node::Occupied(0),
-        Node::Occupied(1), 
-        Node::Occupied(2)
-    ];
-    
-    let view: FenwickTreeView = FenwickTreeView::from(&collection);
+    let collection: [usize; 4] = [0, 1, 2, 3];
+
+    let mut walker: FenwickTreeView<[usize]> = FenwickTreeView::new(&collection, 1);
+    assert_eq!(walker.view, FenwickIndexView { index: 1, lsb: 1 });
+    walker.up();
+    assert_eq!(walker.view, FenwickIndexView { index: 2, lsb: 2 });
 }
