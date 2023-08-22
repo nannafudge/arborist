@@ -9,7 +9,7 @@ mod tests;
 use crate::{
     Tree, TreeWalker,
     NodeSide, NodeType,
-    const_time_select
+    ct_select, ct_select_safe
 };
 use core::ops::{
     Index, IndexMut,
@@ -82,7 +82,10 @@ impl<'tree, C> FenwickTreeView<'tree, C> where
     C: ?Sized + IndexedCollection + Tree<Value = C::Output> 
 {
     pub fn new(tree: &'tree C, index: usize) -> Result<FenwickTreeView<C>, FenwickTreeError> {
-        ensure_index_bounds!(index, tree.length());
+        require!(
+            index > 0 && index <= tree.length(),
+            FenwickTreeError::OutOfBounds { index: index }
+        );
 
         Ok(Self {
             tree: tree,
@@ -158,12 +161,11 @@ impl From<usize> for NodeSide {
     fn from(index: usize) -> Self {
         let index_lsb: usize = lsb(index);
         unsafe {
-            *const_time_select(
-                &NodeSide::Right,
+            *ct_select(
                 &NodeSide::Left,
-                // Bit n+1 determines the side of the node, create
-                // a bitmask from the LSB that fetches such (i.e. 11(0<n>))
-                index & (index_lsb | index_lsb << 1)
+                &NodeSide::Right,
+                // Slice off the LSB, 0 = left, 1 = right
+                index >> index_lsb
             )
         }
     }
@@ -172,10 +174,10 @@ impl From<usize> for NodeSide {
 impl From<&FenwickIndexView> for NodeSide {
     fn from(view: &FenwickIndexView) -> Self {
         unsafe {
-            *const_time_select(
-                &NodeSide::Right,
+            *ct_select(
                 &NodeSide::Left,
-                view.index & (view.lsb | view.lsb << 1)
+                &NodeSide::Right,
+                view.index >> view.lsb
             )
         }
     }
@@ -184,7 +186,7 @@ impl From<&FenwickIndexView> for NodeSide {
 impl From<usize> for NodeType {
     fn from(index: usize) -> Self {
         unsafe {
-            *const_time_select(
+            *ct_select(
                 &NodeType::Node, // [0]
                 &NodeType::Leaf, // [1]
                 // Odd = Leaf, Even = Node
@@ -198,7 +200,7 @@ impl From<usize> for NodeType {
 impl From<&FenwickIndexView> for NodeType {
     fn from(view: &FenwickIndexView) -> Self {
         unsafe {
-            *const_time_select(
+            *ct_select(
                 &NodeType::Node,
                 &NodeType::Leaf,
                 view.index & 1

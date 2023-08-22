@@ -27,21 +27,23 @@ macro_rules! impl_op_assign {
 #[macro_export]
 macro_rules! safe_tree_select {
     ($self:tt, $index:expr) => {
-        unsafe {
-            *const_time_select(
-                &Ok(&$self.tree[$index]),
-                &Err(FenwickTreeError::OutOfBounds{index: $index, tree_len: $self.tree.length()}),
-                ($index == 0 || $index > $self.tree.length()) as usize
-            )
-        }
+        ct_select_safe(
+            &|| -> Result<&C::Output, FenwickTreeError> { 
+                Ok(&$self.tree[$index])
+            },
+            &|| -> Result<&C::Output, FenwickTreeError> { 
+                Err(FenwickTreeError::OutOfBounds{ index: $index })
+            },
+            ($index == 0 || $index > $self.tree.length() - 1) as usize
+        )
     };
 }
 
 #[macro_export]
-macro_rules! ensure_index_bounds {
-    ($index:expr, $tree_len:expr) => {
-        if $index == 0 || $index > $tree_len {
-            return Err(FenwickTreeError::OutOfBounds{ index: $index, tree_len: $tree_len });
+macro_rules! require {
+    ($($clause:expr)+, $err:expr) => {
+        if !($($clause)+) {
+            return Err($err);
         }
     };
 }

@@ -1,3 +1,5 @@
+use std::process::Output;
+
 pub mod fenwick;
 
 /*################################
@@ -25,17 +27,19 @@ mod macros {
          Common Functions
 ################################*/
 
-//TODO: Create safe & tested interface around these enforcing use of Pin
 #[inline(always)]
-pub(crate) unsafe fn const_time_select<T: Unpin + Sized>(a: *const T, b: *const T, selector: usize) -> *const T {
-    assert!(selector < 2); // TODO: Create Selector type to artifically constrain (or only accept bool)
+pub(crate) unsafe fn ct_select<T: Unpin + Sized>(a: *const T, b: *const T, selector: usize) -> *const T {
     a.offset(b.offset_from(a) * (selector & 0x1) as isize)
 }
 
 #[inline(always)]
-pub(crate) unsafe fn const_time_select_mut<T: Unpin + Sized>(a: *mut T, b: *mut T, selector: usize) -> *mut T {
-    assert!(selector < 2);
+pub(crate) unsafe fn ct_select_mut<T: Unpin + Sized>(a: *mut T, b: *mut T, selector: usize) -> *mut T {
     a.offset(b.offset_from(a) * (selector & 0x1) as isize)
+}
+
+#[inline(always)]
+pub(crate) fn ct_select_safe<O>(a: &dyn Fn() -> O, b: &dyn Fn() -> O, selector: usize) -> O {
+    [a, b][selector & 0x1]()
 }
 
 /*################################
