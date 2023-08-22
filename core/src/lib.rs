@@ -84,21 +84,21 @@ pub trait TreeWalker<T: Tree + ?Sized> {
          Node Definitions
 ################################*/
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NodeSide {
     Left,
     Right,
     Null
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NodeType {
     Node,
     Leaf,
     Null
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Node<T> {
     Occupied(T),
     Empty
