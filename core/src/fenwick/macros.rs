@@ -42,10 +42,3 @@ macro_rules! require {
         }
     };
 }
-
-#[macro_export]
-macro_rules! bool_to_choice {
-    ($(($condition:expr) $($op:tt)?)+) => {
-        $(Choice::from($condition as u8) $($op)?)+
-    };
-}

@@ -157,3 +157,66 @@ fn test_traverse_down() {
     assert_eq!(walker.down(NodeSide::Right), Some(&collection[5]));
     assert_eq!(walker.view, FenwickIndexView { index: 5, lsb: 1 });
 }
+
+#[test]
+fn test_seek() {
+    let collection: &[usize] = &gen_collection();
+    // Start at Index 5
+    let mut walker: FenwickTreeView<[usize]> = FenwickTreeView::new(collection, 5).unwrap();
+    // Seek from Node 5 to Node 9
+    assert_eq!(walker.seek(5^9), Some(&collection[9]));
+    assert_eq!(walker.view, FenwickIndexView { index: 9, lsb: 1 });
+    // Seek from Node 9 to closest Namespace to 5 (Node 12)
+    assert_eq!(walker.seek(5), Some(&collection[12]));
+    assert_eq!(walker.view, FenwickIndexView { index: 12, lsb: 4 });
+    // Seek to Zero
+    assert_eq!(walker.seek(12), None);
+    assert_eq!(walker.view, FenwickIndexView { index: 0, lsb: 0 });
+    // Seek to 32 from Zero
+    assert_eq!(walker.seek(32), None);
+    assert_eq!(walker.view, FenwickIndexView { index: 32, lsb: 32 });
+}
+
+#[test]
+fn test_reset() {
+    let collection: &[usize] = &[0; 1];
+    let mut walker: FenwickTreeView<[usize]> = FenwickTreeView::new(collection, 1).unwrap();
+
+    // Seek out of bounds
+    assert_eq!(walker.seek(1^3), None);
+    assert_eq!(walker.view, FenwickIndexView { index: 3, lsb: 1 });
+    // Reset
+    walker.reset();
+    assert_eq!(walker.view, FenwickIndexView { index: 1, lsb: 1 })
+}
+
+#[test]
+fn test_current() {
+    let collection: &[usize] = &gen_collection();
+
+    // Index 1
+    let mut walker: FenwickTreeView<[usize]> = FenwickTreeView::new(collection, 1).unwrap();
+    assert_eq!(walker.current(), Some(&collection[1]));
+
+    // Seek out of bounds
+    let _ = walker.seek(64);
+    assert_eq!(walker.current(), None);
+}
+
+#[test]
+fn test_sibling() {
+    let collection: &[usize] = &gen_collection();
+    let mut walker: FenwickTreeView<[usize]> = FenwickTreeView::new(collection, 1).unwrap();
+
+    // Continually traverse upward from index 1 until we reach the top
+    let mut expected_sibling: usize = 3;
+    loop {
+        if expected_sibling >= collection.len() { break; }
+        assert_eq!(walker.sibling(), Some(&collection[expected_sibling]));
+        let _ = walker.up();
+        expected_sibling *= 2;
+    }
+
+    // sibling() for root tree node should be None
+    assert_eq!(walker.sibling(), None);
+}
