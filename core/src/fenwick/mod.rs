@@ -8,11 +8,9 @@ mod tests;
 
 use crate::{
     Tree, TreeWalker,
-    NodeSide, NodeType,
-    ct_select, ct_select_safe
+    NodeSide, NodeType
 };
 use core::ops::{
-    Index, IndexMut,
     BitOr, BitOrAssign,
     BitXor, BitXorAssign,
     BitAnd, BitAndAssign,
@@ -48,14 +46,6 @@ impl FenwickIndexView {
             lsb: lsb(index)
         }
     }
-
-    fn split(&self) -> (&usize, &usize) {
-        (&self.index, &self.lsb)
-    }
-
-    fn split_mut(&mut self) -> (&mut usize, &mut usize) {
-        (&mut self.index, &mut self.lsb)
-    }
 }
 
 // Assignment operands update index/view lsb upon assignment
@@ -82,10 +72,7 @@ impl<'tree, C> FenwickTreeView<'tree, C> where
     C: ?Sized + IndexedCollection + Tree<Value = C::Output> 
 {
     pub fn new(tree: &'tree C, index: usize) -> Result<FenwickTreeView<C>, FenwickTreeError> {
-        require!(
-            index > 0 && index <= tree.length(),
-            FenwickTreeError::OutOfBounds { index: index }
-        );
+        require!(index > 0, FenwickTreeError::ZeroIndex);
 
         Ok(Self {
             tree: tree,
@@ -99,40 +86,34 @@ impl<'tree, C> FenwickTreeView<'tree, C> where
 ################################*/
 
 impl<'tree, C> TreeWalker<C> for FenwickTreeView<'tree, C> where
-    C: ?Sized + IndexedCollection + Tree<Value = C::Output, Error = FenwickTreeError>
+    C: ?Sized + IndexedCollection + Tree<Value = C::Output>,
 {
     type Path = usize;
 
     // TODO: Investigate whether such may be performed more naturally via. cyclic codes
-    fn up(&mut self) -> Result<&C::Output, FenwickTreeError> {
+    fn up(&mut self) -> Option<&C::Output> {
         // Transition upward to next 'lsb namespace'
         match NodeSide::from(self.view.index) {
             NodeSide::Left => self.view += self.view.lsb,
-            NodeSide::Right => self.view -= self.view.lsb,
-            NodeSide::Null => {
-                return Err(FenwickTreeError::InvalidNodeSide(NodeSide::Null));
-            }
+            NodeSide::Right => self.view -= self.view.lsb
         }
 
-        safe_tree_select!(self, self.view.index)
+        safe_tree_select!(self, self.view.index);
     }
 
-    fn down(&mut self, side: NodeSide) -> Result<&C::Output, FenwickTreeError> {
+    fn down(&mut self, side: NodeSide) -> Option<&C::Output> {
         match side {
             NodeSide::Left => self.view -= self.view.lsb >> 1,
-            NodeSide::Right => self.view += self.view.lsb >> 1,
-            _ => {
-                return Err(FenwickTreeError::InvalidNodeSide(side));
-            }
+            NodeSide::Right => self.view += self.view.lsb >> 1
         };
 
-        safe_tree_select!(self, self.view.index)
+        safe_tree_select!(self, self.view.index);
     }
 
-    fn seek(&mut self, path: usize) -> Result<&C::Output, FenwickTreeError> {
-        self.view.index ^= path;
+    fn seek(&mut self, path: usize) -> Option<&C::Output> {
+        self.view ^= path;
 
-        safe_tree_select!(self, self.view.index)
+        safe_tree_select!(self, self.view.index);
     }
 
     fn reset(&mut self) {
@@ -140,8 +121,12 @@ impl<'tree, C> TreeWalker<C> for FenwickTreeView<'tree, C> where
         self.view.lsb = lsb(self.view.index);
     }
 
-    fn sibling(&self) -> Result<&C::Output, FenwickTreeError> {
-        safe_tree_select!(self, self.view.index ^ self.view.lsb << 1)
+    fn current(&self) -> Option<&C::Output> {
+        safe_tree_select!(self, self.view.index);
+    }
+
+    fn sibling(&self) -> Option<&C::Output> {
+        safe_tree_select!(self, self.view.index ^ self.view.lsb << 1);
     }
 
     fn type_(&self) -> NodeType {
@@ -160,51 +145,40 @@ impl<'tree, C> TreeWalker<C> for FenwickTreeView<'tree, C> where
 impl From<usize> for NodeSide {
     fn from(index: usize) -> Self {
         let index_lsb: usize = lsb(index);
-        unsafe {
-            *ct_select(
-                &NodeSide::Left,
-                &NodeSide::Right,
-                // Slice off the LSB, 0 = left, 1 = right
-                index >> index_lsb
-            )
+        match index >> index_lsb & 1 {
+            0 => NodeSide::Left,
+            1 => NodeSide::Right,
+            _ => panic!("Invariant")
         }
     }
 }
 
 impl From<&FenwickIndexView> for NodeSide {
     fn from(view: &FenwickIndexView) -> Self {
-        unsafe {
-            *ct_select(
-                &NodeSide::Left,
-                &NodeSide::Right,
-                view.index >> view.lsb
-            )
+        match view.index >> view.lsb & 1 {
+            0 => NodeSide::Left,
+            1 => NodeSide::Right,
+            _ => panic!("Invariant")
         }
     }
 }
 
 impl From<usize> for NodeType {
     fn from(index: usize) -> Self {
-        unsafe {
-            *ct_select(
-                &NodeType::Node, // [0]
-                &NodeType::Leaf, // [1]
-                // Odd = Leaf, Even = Node
-                // Odd = [1], Even = [0]
-                index & 1
-            )
+        match index & 1 {
+            0 => NodeType::Node,
+            1 => NodeType::Leaf,
+            _ => panic!("Invariant")
         }
     }
 }
 
 impl From<&FenwickIndexView> for NodeType {
     fn from(view: &FenwickIndexView) -> Self {
-        unsafe {
-            *ct_select(
-                &NodeType::Node,
-                &NodeType::Leaf,
-                view.index & 1
-            )
+        match view.index & 1 {
+            0 => NodeType::Node,
+            1 => NodeType::Leaf,
+            _ => panic!("Invariant")
         }
     }
 }

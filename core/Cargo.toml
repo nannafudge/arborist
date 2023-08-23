@@ -11,8 +11,6 @@ default = []
 
 [dependencies]
 arborist-proc = {version = "0.1.0", path = "../proc"}
-generic-array = "0.14.7"
-subtle = "2.5.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

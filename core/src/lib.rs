@@ -1,5 +1,3 @@
-use std::process::Output;
-
 pub mod fenwick;
 
 /*################################
@@ -24,25 +22,6 @@ mod macros {
 }
 
 /*################################
-         Common Functions
-################################*/
-
-#[inline(always)]
-pub(crate) unsafe fn ct_select<T: Unpin + Sized>(a: *const T, b: *const T, selector: usize) -> *const T {
-    a.offset(b.offset_from(a) * (selector & 0x1) as isize)
-}
-
-#[inline(always)]
-pub(crate) unsafe fn ct_select_mut<T: Unpin + Sized>(a: *mut T, b: *mut T, selector: usize) -> *mut T {
-    a.offset(b.offset_from(a) * (selector & 0x1) as isize)
-}
-
-#[inline(always)]
-pub(crate) fn ct_select_safe<O>(a: &dyn Fn() -> O, b: &dyn Fn() -> O, selector: usize) -> O {
-    [a, b][selector & 0x1]()
-}
-
-/*################################
            Tree Traits
 ################################*/
 
@@ -50,23 +29,22 @@ pub(crate) fn ct_select_safe<O>(a: &dyn Fn() -> O, b: &dyn Fn() -> O, selector: 
 pub trait Tree {
     type Key;
     type Value;
-    type Error;
 
     fn size(&self) -> usize;
 
-    fn get(&self, key: &Self::Key) -> Result<&Self::Value, Self::Error>;
-    fn contains(&self, key: &Self::Key) -> Result<&Self::Value, Self::Error>;
+    fn get(&self, key: &Self::Key) -> Option<&Self::Value>;
+    fn contains(&self, key: &Self::Key) -> Option<&Self::Value>;
 }
 
 pub trait TreeMut: Tree {
-    fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<&mut Self::Value, Self::Error>;
-    fn update(&mut self, key: &Self::Key, value: Self::Value) -> Result<&mut Self::Value, Self::Error>;
-    fn delete(&mut self, key: &Self::Key, value: Self::Value) -> Result<&mut Self::Value, Self::Error>;
+    fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Option<&mut Self::Value>;
+    fn update(&mut self, key: &Self::Key, value: Self::Value) -> Option<&mut Self::Value>;
+    fn delete(&mut self, key: &Self::Key, value: Self::Value) -> Option<&mut Self::Value>;
 
-    fn push(&mut self, value: Self::Value) -> Result<&Self::Value, Self::Error>;
-    fn pop(&mut self, key: &Self::Key) -> Result<&mut Self::Value, Self::Error>;
+    fn push(&mut self, value: Self::Value) -> Option<&mut Self::Value>;
+    fn pop(&mut self, key: &Self::Key) -> Option<&mut Self::Value>;
 
-    fn get_mut(&mut self, key: &Self::Key) -> Result<&mut Self::Value, Self::Error>;
+    fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value>;
 }
 
 // Generic defined to tightly bind Walkers to their respective Tree declarations
@@ -74,12 +52,13 @@ pub trait TreeWalker<T: Tree + ?Sized> {
     type Path;
 
     // Traversal methods
-    fn up(&mut self) -> Result<&T::Value, T::Error>;
-    fn down(&mut self, side: NodeSide) -> Result<&T::Value, T::Error>;
-    fn seek(&mut self, path: Self::Path) -> Result<&T::Value, T::Error>;
+    fn up(&mut self) -> Option<&T::Value>;
+    fn down(&mut self, side: NodeSide) -> Option<&T::Value>;
+    fn seek(&mut self, path: Self::Path) -> Option<&T::Value>;
     fn reset(&mut self);
     // Node-related methods
-    fn sibling(&self) -> Result<&T::Value, T::Error>;
+    fn current(&self) -> Option<&T::Value>;
+    fn sibling(&self) -> Option<&T::Value>;
     fn type_(&self) -> NodeType;
     fn side(&self) -> NodeSide;
 }
@@ -91,31 +70,11 @@ pub trait TreeWalker<T: Tree + ?Sized> {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NodeSide {
     Left,
-    Right,
-    Null
+    Right
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum NodeType {
     Node,
-    Leaf,
-    Null
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Node<T> {
-    Occupied(T),
-    Empty
-}
-
-impl<T> Into<Option<T>> for Node<T> {
-    fn into(self) -> Option<T> {
-        unwrap_enum!(self, Some(v), None, Node::Occupied(v))
-    }
-}
-
-impl<'a, T> Into<Option<&'a T>> for &'a Node<T> {
-    fn into(self) -> Option<&'a T> {
-        unwrap_enum!(self, Some(v), None, Node::Occupied(v))
-    }
+    Leaf
 }

@@ -17,7 +17,6 @@ macro_rules! impl_op_assign {
         impl $trait for $target {
             fn $fn(&mut self, rhs: $rhs) {
                 self.index $op rhs;
-                if self.index == 0 { self.index = 1 };
                 self.lsb = lsb(self.index);
             }
         }
@@ -27,15 +26,11 @@ macro_rules! impl_op_assign {
 #[macro_export]
 macro_rules! safe_tree_select {
     ($self:tt, $index:expr) => {
-        ct_select_safe(
-            &|| -> Result<&C::Output, FenwickTreeError> { 
-                Ok(&$self.tree[$index])
-            },
-            &|| -> Result<&C::Output, FenwickTreeError> { 
-                Err(FenwickTreeError::OutOfBounds{ index: $index })
-            },
-            ($index == 0 || $index > $self.tree.length() - 1) as usize
-        )
+        if $index == 0 || $index >= $self.tree.length() {
+            return None;
+        }
+
+        return Some(&$self.tree[$index]);
     };
 }
 
@@ -45,5 +40,12 @@ macro_rules! require {
         if !($($clause)+) {
             return Err($err);
         }
+    };
+}
+
+#[macro_export]
+macro_rules! bool_to_choice {
+    ($(($condition:expr) $($op:tt)?)+) => {
+        $(Choice::from($condition as u8) $($op)?)+
     };
 }
