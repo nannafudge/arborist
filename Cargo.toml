@@ -5,8 +5,15 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+threading = []
+simd = []
+no_std = ["bumpalo", "arborist-core/no_std"]
+default = []
+
 [dependencies]
 arborist-core = { version = "0.1.0", path = "./core" }
+bumpalo = { version = "3.13.0", optional = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

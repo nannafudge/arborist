@@ -7,15 +7,21 @@ pub mod traits;
 mod tests;
 
 use crate::{
-    Tree, TreeWalker,
-    NodeSide, NodeType
+    Height,  Direction,
+    NodeSide, NodeType,
+    TreeWalker, TreeWalkerMut,
+    require
 };
-use core::ops::{
-    BitOr, BitOrAssign,
-    BitXor, BitXorAssign,
-    BitAnd, BitAndAssign,
-    AddAssign, SubAssign,
+use core::{
+    marker::PhantomData,
+    ops::{
+        BitOr, BitOrAssign,
+        BitXor, BitXorAssign,
+        BitAnd, BitAndAssign,
+        AddAssign, SubAssign,
+    }
 };
+use arborist_proc::interpolate_expr;
 
 pub use crate::fenwick::{errors::*, traits::*};
 
@@ -30,18 +36,31 @@ pub fn lsb(i: usize) -> usize {
     (_i & -_i) as usize
 }
 
+impl<C> Height for C where C: Length + ?Sized {
+    #[cfg(target_pointer_width = "32")]
+    fn height(&self) -> usize {
+        (self.length() as f32).log(2.0).ceil() as usize
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    fn height(&self) -> usize {
+        (self.length() as f64).log(2.0).ceil() as usize
+    }
+}
+
 /*################################
             Index View
 ################################*/
+
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
-pub struct FenwickIndexView {
+pub struct IndexView {
     pub index: usize,
     pub lsb: usize
 }
 
-impl FenwickIndexView {
+impl IndexView {
     fn new(index: usize) -> Self {
-        FenwickIndexView {
+        IndexView {
             index: index,
             lsb: lsb(index)
         }
@@ -49,93 +68,72 @@ impl FenwickIndexView {
 }
 
 // Assignment operands update index/view lsb upon assignment
-impl_op!{BitOr<usize>, FenwickIndexView, bitor, |, usize}
-impl_op!{BitXor<usize>, FenwickIndexView, bitxor, ^, usize}
-impl_op!{BitAnd<usize>, FenwickIndexView, bitand, &, usize}
-impl_op_assign!{BitOrAssign<usize>, FenwickIndexView, bitor_assign, |=, usize}
-impl_op_assign!{BitXorAssign<usize>, FenwickIndexView, bitxor_assign, ^=, usize}
-impl_op_assign!{BitAndAssign<usize>, FenwickIndexView, bitand_assign, &=, usize}
-impl_op_assign!{AddAssign<usize>, FenwickIndexView, add_assign, +=, usize}
-impl_op_assign!{SubAssign<usize>, FenwickIndexView, sub_assign, -=, usize}
+impl_op!{BitOr<usize>, IndexView, bitor, |, usize}
+impl_op!{BitXor<usize>, IndexView, bitxor, ^, usize}
+impl_op!{BitAnd<usize>, IndexView, bitand, &, usize}
+impl_op_assign!{BitOrAssign<usize>, IndexView, bitor_assign, |=, usize}
+impl_op_assign!{BitXorAssign<usize>, IndexView, bitxor_assign, ^=, usize}
+impl_op_assign!{BitAndAssign<usize>, IndexView, bitand_assign, &=, usize}
+impl_op_assign!{AddAssign<usize>, IndexView, add_assign, +=, usize}
+impl_op_assign!{SubAssign<usize>, IndexView, sub_assign, -=, usize}
 
 /*################################
-            Tree View
+           Tree Walkers
 ################################*/
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FenwickTreeView<'tree, C: ?Sized> {
-    tree: &'tree C,
-    pub view: FenwickIndexView
+pub struct FenwickTreeWalker<C, O> {
+    inner: C,
+    pub view: IndexView,
+    marker: PhantomData<O>
 }
 
-impl<'tree, C> FenwickTreeView<'tree, C> where
-    C: ?Sized + IndexedCollection + Tree<Value = C::Output> 
-{
-    pub fn new(tree: &'tree C, index: usize) -> Result<FenwickTreeView<C>, FenwickTreeError> {
-        require!(index > 0, FenwickTreeError::ZeroIndex);
+pub type VirtualTreeWalker<'tree, C> = FenwickTreeWalker<&'tree C, usize>;
+pub type StatefulTreeWalker<'tree, C> = FenwickTreeWalker<&'tree C, &'tree C>;
+pub type StatefulTreeWalkerMut<'tree, C> = FenwickTreeWalker<&'tree mut C, &'tree mut C>;
+
+impl<C: Length, O> FenwickTreeWalker<C, O> {
+    fn new(inner: C, index: usize) -> Result<FenwickTreeWalker<C, O>, FenwickTreeError> {
+        require!(index > 0, FenwickTreeError::OutOfBounds(index, inner.length()));
 
         Ok(Self {
-            tree: tree,
-            view: FenwickIndexView::new(index)
+            inner: inner,
+            view: IndexView::new(index),
+            marker: PhantomData
         })
     }
 }
 
-/*################################
-            Tree Walker
-################################*/
-
-impl<'tree, C> TreeWalker<C> for FenwickTreeView<'tree, C> where
-    C: ?Sized + IndexedCollection + Tree<Value = C::Output>,
+impl<'tree, C> TreeWalker<'tree> for VirtualTreeWalker<'tree, C> where
+    C: ?Sized + IndexedCollection
 {
-    type Path = usize;
-
-    // TODO: Investigate whether such may be performed more naturally via. cyclic codes
-    fn up(&mut self) -> Option<&C::Output> {
-        // Transition upward to next 'lsb namespace'
-        match NodeSide::from(self.view.index) {
-            NodeSide::Left => self.view += self.view.lsb,
-            NodeSide::Right => self.view -= self.view.lsb
-        }
-
-        safe_tree_select!(self, self.view.index);
+    impl_walker!{
+        usize, safe_tree_select!(@virtual(self, $[ret]))
     }
+}
 
-    fn down(&mut self, side: NodeSide) -> Option<&C::Output> {
-        match side {
-            NodeSide::Left => self.view -= self.view.lsb >> 1,
-            NodeSide::Right => self.view += self.view.lsb >> 1
-        };
-
-        safe_tree_select!(self, self.view.index);
+impl<'tree, C> TreeWalker<'tree> for StatefulTreeWalker<'tree, C> where
+    C: ?Sized + IndexedCollection
+{
+    impl_walker!{
+        &'tree C::Output, safe_tree_select!(@stateful(self, $[ret], &))
     }
+}
 
-    fn seek(&mut self, path: usize) -> Option<&C::Output> {
-        self.view ^= path;
-
-        safe_tree_select!(self, self.view.index);
+impl<'tree, C> TreeWalker<'tree> for StatefulTreeWalkerMut<'tree, C> where
+    C: ?Sized + IndexedCollectionMut
+{
+    impl_walker!{
+        &'tree C::Output, safe_tree_select!(@stateful(self, $[ret], &))
     }
+}
 
-    fn reset(&mut self) {
-        self.view.index = self.tree.length();
-        self.view.lsb = lsb(self.view.index);
-    }
-
-    fn current(&self) -> Option<&C::Output> {
-        safe_tree_select!(self, self.view.index);
-    }
-
-    fn sibling(&self) -> Option<&C::Output> {
-        safe_tree_select!(self, self.view.index ^ self.view.lsb << 1);
-    }
-
-    fn type_(&self) -> NodeType {
-        NodeType::from(&self.view)
-    }
-
-    fn side(&self) -> NodeSide {
-        NodeSide::from(&self.view)
-    }
+impl<'tree, C> TreeWalkerMut<'tree> for StatefulTreeWalkerMut<'tree, C> where
+    C: ?Sized + IndexedCollectionMut
+{
+    impl_walker!{@mut(
+        &'tree mut C::Output, safe_tree_select!(@stateful(self, $[ret], &mut))
+    )}
 }
 
 /*################################
@@ -153,8 +151,8 @@ impl From<usize> for NodeSide {
     }
 }
 
-impl From<&FenwickIndexView> for NodeSide {
-    fn from(view: &FenwickIndexView) -> Self {
+impl From<&IndexView> for NodeSide {
+    fn from(view: &IndexView) -> Self {
         match view.index >> view.lsb & 1 {
             0 => NodeSide::Left,
             1 => NodeSide::Right,
@@ -173,8 +171,8 @@ impl From<usize> for NodeType {
     }
 }
 
-impl From<&FenwickIndexView> for NodeType {
-    fn from(view: &FenwickIndexView) -> Self {
+impl From<&IndexView> for NodeType {
+    fn from(view: &IndexView) -> Self {
         match view.index & 1 {
             0 => NodeType::Node,
             1 => NodeType::Leaf,

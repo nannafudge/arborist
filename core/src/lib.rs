@@ -12,25 +12,45 @@ mod macros {
                 _ => $default
             }
         };
+        ($var:expr, $return:expr, $( $subcases:pat ),+) => {
+            match $var {
+                $($subcases)|+ => $return
+            }
+        };
         ($var:expr, $default:expr, $( $arm:pat => $body:expr ),+) => {
             match $var {
                 $($arm => $body,)+
                 _ => $default
             }
         };
+        ($var:expr, $( $arm:pat => $body:expr ),+) => {
+            match $var {
+                $($arm => $body,)+
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! require {
+        ($($clause:expr)+, $err:expr) => {
+            if !($($clause)+) {
+                return Err($err);
+            }
+        };
     }
 }
 
 /*################################
-           Tree Traits
+              Tree
 ################################*/
 
+pub trait Height {
+    fn height(&self) -> usize;
+}
+
 // Awaiting chalk support for nested associated type expansion...
-pub trait Tree {
+pub trait Tree: Height {
     type Key;
     type Value;
-
-    fn size(&self) -> usize;
 
     fn get(&self, key: &Self::Key) -> Option<&Self::Value>;
     fn contains(&self, key: &Self::Key) -> Option<&Self::Value>;
@@ -47,24 +67,47 @@ pub trait TreeMut: Tree {
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value>;
 }
 
-// Generic defined to tightly bind Walkers to their respective Tree declarations
-pub trait TreeWalker<T: Tree + ?Sized> {
-    type Path;
+/*################################
+           Tree Walker 
+################################*/
 
-    // Traversal methods
-    fn up(&mut self) -> Option<&T::Value>;
-    fn down(&mut self, side: NodeSide) -> Option<&T::Value>;
-    fn seek(&mut self, path: Self::Path) -> Option<&T::Value>;
-    fn reset(&mut self);
-    // Node-related methods
-    fn current(&self) -> Option<&T::Value>;
-    fn sibling(&self) -> Option<&T::Value>;
-    fn type_(&self) -> NodeType;
-    fn side(&self) -> NodeSide;
+pub trait TreeWalker<'a> {
+    type Path;
+    type Output;
+
+    fn peek(&'a self, direction: Direction) -> Option<Self::Output>;
+    fn probe(&'a self, path: Self::Path) -> Option<Self::Output>;
+    fn traverse(&'a mut self, direction: Direction) -> Option<Self::Output>;
+    fn seek(&'a mut self, path: Self::Path) -> Option<Self::Output>;
+    fn reset(&'a mut self);
+
+    fn current(&'a self) -> Option<Self::Output>;
+    fn sibling(&'a self) -> Option<Self::Output>;
+    fn type_(&'a self) -> NodeType;
+    fn side(&'a self) -> NodeSide;
+}
+
+pub trait TreeWalkerMut<'a>: TreeWalker<'a> {
+    type MutOutput;
+
+    fn peek_mut(&'a mut self, direction: Direction) -> Option<Self::MutOutput>;
+    fn probe_mut(&'a mut self, path: Self::Path) -> Option<Self::MutOutput>;
+    fn traverse_mut(&'a mut self, direction: Direction) -> Option<Self::MutOutput>;
+    fn seek_mut(&'a mut self, path: Self::Path) -> Option<Self::MutOutput>;
+
+    fn current_mut(&'a mut self) -> Option<Self::MutOutput>;
+    fn sibling_mut(&'a mut self) -> Option<Self::MutOutput>;
+}
+
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right
 }
 
 /*################################
-         Node Definitions
+            Tree Node
 ################################*/
 
 #[derive(Debug, Copy, Clone, PartialEq)]
