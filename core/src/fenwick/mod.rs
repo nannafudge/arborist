@@ -104,36 +104,68 @@ impl<C: Length, O> FenwickTreeWalker<C, O> {
     }
 }
 
-impl<'tree, C> TreeWalker<'tree> for VirtualTreeWalker<'tree, C> where
-    C: ?Sized + IndexedCollection
+impl<'walker, 'tree, C> TreeWalker<'walker> for VirtualTreeWalker<'tree, C> where
+    C: ?Sized + IndexedCollection,
+    'tree: 'walker
 {
     impl_walker!{
-        usize, safe_tree_select!(@virtual(self, $[ret]))
+        output = usize,
+        return_wrapper = safe_tree_select!(
+            @virtual(
+                self = self,
+                item = $[ret]
+            )
+        )
     }
 }
 
-impl<'tree, C> TreeWalker<'tree> for StatefulTreeWalker<'tree, C> where
-    C: ?Sized + IndexedCollection
+impl<'walker, 'tree, C> TreeWalker<'walker> for StatefulTreeWalker<'tree, C> where
+    C: ?Sized + IndexedCollection,
+    'tree: 'walker
 {
     impl_walker!{
-        &'tree C::Output, safe_tree_select!(@stateful(self, $[ret], &))
+        output = &'walker C::Output,
+        return_wrapper = safe_tree_select!(
+            @stateful(
+                self = self,
+                index = $[ret],
+                mutators = &
+            )
+        )
     }
 }
 
-impl<'tree, C> TreeWalker<'tree> for StatefulTreeWalkerMut<'tree, C> where
+impl<'walker, 'tree, C> TreeWalker<'walker> for StatefulTreeWalkerMut<'tree, C> where
+    C: ?Sized + IndexedCollectionMut,
+    'tree: 'walker
+{
+    impl_walker!{
+        output = &'walker C::Output,
+        return_wrapper = safe_tree_select!(
+            @stateful(
+                self = self,
+                index = $[ret],
+                mutators = &
+            )
+        )
+    }
+}
+
+impl<'walker, 'tree, C> TreeWalkerMut<'walker> for StatefulTreeWalkerMut<'walker, C> where
     C: ?Sized + IndexedCollectionMut
 {
     impl_walker!{
-        &'tree C::Output, safe_tree_select!(@stateful(self, $[ret], &))
+        @mut(
+            output = &'walker mut C::Output,
+            return_wrapper = safe_tree_select!(
+                @stateful(
+                    self = self,
+                    index = $[ret],
+                    mutators = &mut
+                )
+            )
+        )
     }
-}
-
-impl<'tree, C> TreeWalkerMut<'tree> for StatefulTreeWalkerMut<'tree, C> where
-    C: ?Sized + IndexedCollectionMut
-{
-    impl_walker!{@mut(
-        &'tree mut C::Output, safe_tree_select!(@stateful(self, $[ret], &mut))
-    )}
 }
 
 /*################################

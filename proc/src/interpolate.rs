@@ -23,15 +23,16 @@ fn parse_kv<'a>(input: &ParseBuffer<'a>) -> Result<(Ident, TokenStream)> {
 
 impl Parse for InterpolateExpr {
     fn parse(input: ParseStream) -> Result<Self> {
+        let template = input.parse()?;
+        input.parse::<Token![,]>()?;
+        
         let mut values: BTreeMap<String, TokenStream> = BTreeMap::new();
         while let Ok((name, content)) = parse_kv(input) {
             values.insert(name.to_string(), content);
         }
 
-        input.parse::<Token![,]>()?;
-
         Ok(Self {
-            template: input.parse()?,
+            template: template,
             vals: values
         })
     }

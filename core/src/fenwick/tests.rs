@@ -1,58 +1,51 @@
 use crate::{NodeSide, NodeType, TreeWalker};
 use crate::fenwick::{
     VirtualTreeWalker, StatefulTreeWalker, StatefulTreeWalkerMut,
-    IndexView, Direction
+    IndexView, Direction, Length
 };
 
 macro_rules! impl_tests {
-    (@peek($tw:ty $(,$ret_mods:tt)?)) => {
+    (peek($tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
         let collection: &[usize] = &gen_collection();
-        let walker: $tw = <$tw>::new(collection, 1).unwrap();
+        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
         assert_eq!(walker.view, IndexView { index: 1, lsb: 1 });
         
         // Up from 1 = 2
-        assert_eq!(walker.peek(Direction::Up), Some($($ret_mods)? 2));
-        // Down from 1 = 1
+        assert_eq!(walker.peek(Direction::Up), Some($($ref$($mut)?)? 2));
+        // No elements beneath 1
         assert_eq!(walker.peek(Direction::Down), None);
+        // 1 last in array, no elements to left
         assert_eq!(walker.peek(Direction::Left), None);
-        assert_eq!(walker.peek(Direction::Right), Some($($ret_mods)? 3));
+        // Right should be sibling
+        assert_eq!(walker.peek(Direction::Right), Some($($ref$($mut)?)? 3));
+        
+        // Shift to index 4
+        walker.view.index = 4;
+        walker.view.lsb = 4;
+
+        assert_eq!(walker.peek(Direction::Up), Some($($ref$($mut)?)? 8));
+        assert_eq!(walker.peek(Direction::Down), Some($($ref$($mut)?)? 2));
+        assert_eq!(walker.peek(Direction::Left), None);
+        assert_eq!(walker.peek(Direction::Right), Some($($ref$($mut)?)? 12));
     };
-    ($tw:ty, $ret_mods:tt) => {
-        #[test]
-        fn test_$tw_peek() {
+    (probe($tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
 
+    };
+    (seek($tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
+        let collection: &[usize] = &gen_collection();
+        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
+
+        for i in 1..collection.len() {
+            assert_eq!(walker.seek(i), Some($($ref$($mut)?)? i));
         }
-        #[test]
-        fn test_$tw_probe() {
 
-        }
+        assert_eq!(walker.seek(0), None);
+        assert_eq!(walker.seek(walker.inner.length()), None);
+    };
+    (@test $name:ident($fn:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
         #[test]
-        fn test_$tw_traverse() {
-
-        }
-        #[test]
-        fn test_$tw_seek() {
-
-        }
-        #[test]
-        fn test_$tw_reset() {
-
-        }
-        #[test]
-        fn test_$tw_current() {
-
-        }
-        #[test]
-        fn test_$tw_sibling() {
-
-        }
-        #[test]
-        fn test_$tw_type_() {
-
-        }
-        #[test]
-        fn test_$tw_side() {
-
+        fn $fn() {
+            impl_tests!{$name($tw $(,$ref$($mut)?)?)}
         }
     };
 }
@@ -129,24 +122,10 @@ fn test_nodetype_conversion() {
     assert_eq!(NodeType::from(&IndexView::new(7)), NodeType::Leaf);
 }
 
-#[test]
-fn test_virtual_walker_construction() {
-    let collection: &[usize] = &gen_collection();
+impl_tests!{@test peek(test_virtual_walker_peek, VirtualTreeWalker<[usize]>)}
+impl_tests!{@test peek(test_stateful_walker_peek, StatefulTreeWalker<[usize]>, &)}
+impl_tests!{@test peek(test_stateful_walker_mut_peek, StatefulTreeWalker<[usize]>, &)}
 
-    let walker: VirtualTreeWalker<[usize]> = VirtualTreeWalker::new(collection, 1).unwrap();
-    assert_eq!(walker.view, IndexView { index: 1, lsb: 1 });
-}
-
-#[test]
-fn test_virtual_walker_peek() {
-    impl_tests!{@peek(VirtualTreeWalker<[usize]>)};
-}
-
-#[test]
-fn test_stateful_walker_construction() {
-    let collection: &[usize] = &gen_collection();
-
-    let walker: StatefulTreeWalker<[usize]> = StatefulTreeWalker::new(collection, 1).unwrap();
-    assert_eq!(walker.view, IndexView { index: 1, lsb: 1 });
-}
-
+impl_tests!{@test seek(test_virtual_walker_seek, VirtualTreeWalker<[usize]>)}
+impl_tests!{@test seek(test_stateful_walker_seek, StatefulTreeWalker<[usize]>, &)}
+impl_tests!{@test seek(test_stateful_walker_mut_seek, StatefulTreeWalker<[usize]>, &)}
