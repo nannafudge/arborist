@@ -54,8 +54,8 @@ impl<C> Height for C where C: Length + ?Sized {
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct IndexView {
-    pub index: usize,
-    pub lsb: usize
+    pub(crate) index: usize,
+    pub(crate) lsb: usize
 }
 
 impl IndexView {
