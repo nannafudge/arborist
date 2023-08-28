@@ -28,3 +28,14 @@ pub trait IndexedCollectionMut: IndexMut<usize> + IndexedCollection {}
 impl<C> IndexedCollection for C where C: Index<usize> + Length + ?Sized {}
 impl<C> IndexedCollectionMut for C where C: IndexMut<usize> + IndexedCollection + ?Sized {}
 
+#[cfg(any(feature = "fuzz", feature = "bench"))]
+pub mod test_impls {
+    use crate::fenwick::traits::Length;
+
+    // For test purposes, namespaced to avoid conflicts
+    impl Length for usize {
+        fn length(&self) -> usize {
+            *self
+        }
+    }
+}

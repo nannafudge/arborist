@@ -6,15 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-threading = []
-simd = []
 no_std = ["bumpalo"]
+bench = ["criterion", "rand"]
+fuzz = ["proptest"]
 default = []
 
 [dependencies]
-arborist-proc = {version = "0.1.0", path = "../proc"}
+arborist-proc = { version = "0.1.0", path = "../proc" }
 bumpalo = { version = "3.13.0", optional = true }
-quote = "1.0.33"
+
+#[dev-dependencies]
+proptest = { version = "1.2.0", optional = true }
+criterion = { version = "0.3.6", optional = true }
+rand = { version = "0.8.5", features = ["small_rng"], optional = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[[bench]]
+name = "fenwick"
+harness = false

@@ -6,8 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-threading = []
-simd = []
 no_std = ["bumpalo", "arborist-core/no_std"]
 default = []
 

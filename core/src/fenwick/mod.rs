@@ -19,6 +19,7 @@ use core::{
         BitXor, BitXorAssign,
         BitAnd, BitAndAssign,
         AddAssign, SubAssign,
+        Add, Sub
     }
 };
 use arborist_proc::interpolate_expr;
@@ -26,10 +27,9 @@ use arborist_proc::interpolate_expr;
 pub use crate::fenwick::{errors::*, traits::*};
 
 /*################################
-           Functions
+            Functions
 ################################*/
 
-// Casting here should induce no overhead due to size equivalence
 #[inline(always)]
 pub fn lsb(i: usize) -> usize {
     let _i: isize = i as isize;
@@ -37,14 +37,14 @@ pub fn lsb(i: usize) -> usize {
 }
 
 impl<C> Height for C where C: Length + ?Sized {
-    #[cfg(target_pointer_width = "32")]
+    #[cfg(not(target_pointer_width = "64"))]
     fn height(&self) -> usize {
-        (self.length() as f32).log(2.0).ceil() as usize
+        (self.length() as f32).log2().ceil() as usize
     }
 
     #[cfg(target_pointer_width = "64")]
     fn height(&self) -> usize {
-        (self.length() as f64).log(2.0).ceil() as usize
+        (self.length() as f64).log2().ceil() as usize
     }
 }
 
@@ -68,14 +68,16 @@ impl IndexView {
 }
 
 // Assignment operands update index/view lsb upon assignment
-impl_op!{BitOr<usize>, IndexView, bitor, |, usize}
-impl_op!{BitXor<usize>, IndexView, bitxor, ^, usize}
-impl_op!{BitAnd<usize>, IndexView, bitand, &, usize}
-impl_op_assign!{BitOrAssign<usize>, IndexView, bitor_assign, |=, usize}
-impl_op_assign!{BitXorAssign<usize>, IndexView, bitxor_assign, ^=, usize}
-impl_op_assign!{BitAndAssign<usize>, IndexView, bitand_assign, &=, usize}
-impl_op_assign!{AddAssign<usize>, IndexView, add_assign, +=, usize}
-impl_op_assign!{SubAssign<usize>, IndexView, sub_assign, -=, usize}
+impl_op!{BitOr<usize>, bitor, |, usize}
+impl_op!{BitXor<usize>, bitxor, ^, usize}
+impl_op!{BitAnd<usize>, bitand, &, usize}
+impl_op!{Add<usize>, add, +, usize}
+impl_op!{Sub<usize>, sub, -, usize}
+impl_op_assign!{BitOrAssign<usize>, bitor_assign, |=, usize}
+impl_op_assign!{BitXorAssign<usize>, bitxor_assign, ^=, usize}
+impl_op_assign!{BitAndAssign<usize>, bitand_assign, &=, usize}
+impl_op_assign!{AddAssign<usize>, add_assign, +=, usize}
+impl_op_assign!{SubAssign<usize>, sub_assign, -=, usize}
 
 /*################################
            Tree Walkers
@@ -104,68 +106,53 @@ impl<C: Length, O> FenwickTreeWalker<C, O> {
     }
 }
 
-impl<'walker, 'tree, C> TreeWalker<'walker> for VirtualTreeWalker<'tree, C> where
-    C: ?Sized + IndexedCollection,
-    'tree: 'walker
-{
-    impl_walker!{
-        output = usize,
-        return_wrapper = safe_tree_select!(
-            @virtual(
-                self = self,
-                item = $[ret]
-            )
+impl_walker!{
+    type = VirtualTreeWalker,
+    output = usize,
+    return_wrapper = safe_tree_select!(
+        @virtual(
+            self = self,
+            item = $[ret]
         )
-    }
+    )
 }
 
-impl<'walker, 'tree, C> TreeWalker<'walker> for StatefulTreeWalker<'tree, C> where
-    C: ?Sized + IndexedCollection,
-    'tree: 'walker
-{
-    impl_walker!{
-        output = &'walker C::Output,
+impl_walker!{
+    type = StatefulTreeWalker,
+    output = &'walker C::Output,
+    return_wrapper = safe_tree_select!(
+        @stateful(
+            self = self,
+            index = $[ret],
+            mutators = &
+        )
+    )
+}
+
+impl_walker!{
+    type = StatefulTreeWalkerMut,
+    output = &'walker C::Output,
+    return_wrapper = safe_tree_select!(
+        @stateful(
+            self = self,
+            index = $[ret],
+            mutators = &
+        )
+    )
+}
+
+impl_walker!{
+    @mut(
+        type = StatefulTreeWalkerMut,
+        output = &'walker mut C::Output,
         return_wrapper = safe_tree_select!(
             @stateful(
                 self = self,
                 index = $[ret],
-                mutators = &
+                mutators = &mut
             )
         )
-    }
-}
-
-impl<'walker, 'tree, C> TreeWalker<'walker> for StatefulTreeWalkerMut<'tree, C> where
-    C: ?Sized + IndexedCollectionMut,
-    'tree: 'walker
-{
-    impl_walker!{
-        output = &'walker C::Output,
-        return_wrapper = safe_tree_select!(
-            @stateful(
-                self = self,
-                index = $[ret],
-                mutators = &
-            )
-        )
-    }
-}
-
-impl<'walker, 'tree, C> TreeWalkerMut<'walker> for StatefulTreeWalkerMut<'walker, C> where
-    C: ?Sized + IndexedCollectionMut
-{
-    impl_walker!{
-        @mut(
-            output = &'walker mut C::Output,
-            return_wrapper = safe_tree_select!(
-                @stateful(
-                    self = self,
-                    index = $[ret],
-                    mutators = &mut
-                )
-            )
-        )
-    }
+    )
 }
 
 /*################################
