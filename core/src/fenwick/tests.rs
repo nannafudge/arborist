@@ -294,12 +294,12 @@ impl_tests!{sibling for StatefulTreeWalkerMut<[usize]> where inner = mut return 
 #[cfg(feature = "fuzz")]
 mod fuzz {
     use proptest::prelude::*;
-    use crate::fenwick::{Height, test_impls::*};
+    use crate::fenwick::compat::log2_bin;
 
     proptest! {
         #[test]
-        fn test_height(s in 0..usize::MAX) {
-            prop_assert_eq!(Height::height(&s), (s as f64).log(2.0).ceil() as usize);
+        fn test_log2_bin_height(s in 0..usize::MAX) {
+            prop_assert_eq!(log2_bin(&s), (s as f64).log(2.0).ceil() as usize);
         }
     }
 }

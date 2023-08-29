@@ -30,12 +30,34 @@ pub use crate::fenwick::{errors::*, traits::*};
             Functions
 ################################*/
 
+#[cfg(any(feature = "no_float", feature = "fuzz"))]
+pub(crate) mod compat {
+    const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
+
+    #[inline(always)]
+    pub(crate) fn log2_bin(length: &usize) -> usize {
+        let mut mid: usize = USIZE_MIDPOINT;
+        let mut cur: usize = USIZE_MIDPOINT;
+    
+        while mid > 1 {
+            match length >> cur {
+                1 => break,
+                0 => cur -= { mid >>= 1; mid },
+                _ => cur += { mid >>= 1; mid },
+            }
+        }
+    
+        cur + (&crate::fenwick::lsb(*length) != length) as usize
+    }
+}
+
 #[inline(always)]
 pub fn lsb(i: usize) -> usize {
     let _i: isize = i as isize;
     (_i & -_i) as usize
 }
 
+#[cfg(not(feature = "no_float"))]
 impl<C> Height for C where C: Length + ?Sized {
     #[cfg(not(target_pointer_width = "64"))]
     fn height(&self) -> usize {
@@ -45,6 +67,13 @@ impl<C> Height for C where C: Length + ?Sized {
     #[cfg(target_pointer_width = "64")]
     fn height(&self) -> usize {
         (self.length() as f64).log2().ceil() as usize
+    }
+}
+
+#[cfg(feature = "no_float")]
+impl<C> Height for C where C: Length + ?Sized {
+    fn height(&self) -> usize {
+        log2_bin(self.length())
     }
 }
 

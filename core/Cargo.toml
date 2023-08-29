@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-no_std = ["bumpalo"]
 bench = ["criterion", "rand"]
 fuzz = ["proptest"]
+no_std = ["bumpalo"]
+no_float = []
 default = []
 
 [dependencies]

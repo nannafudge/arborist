@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+bench = ["arborist-core/bench"]
+fuzz = ["arborist-core/fuzz"]
 no_std = ["bumpalo", "arborist-core/no_std"]
+no_float = ["arborist-core/no_float"]
 default = []
 
 [dependencies]

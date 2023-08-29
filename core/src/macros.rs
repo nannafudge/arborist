@@ -35,10 +35,3 @@ macro_rules! require {
         }
     };
 }
-
-#[macro_export]
-macro_rules! escape_syntax {
-    ($($a:tt)*) => {
-        
-    };
-}
