@@ -22,7 +22,7 @@ use core::{
         Add, Sub
     }
 };
-use arborist_proc::interpolate_expr;
+use arborist_proc::interpolate;
 
 pub use crate::fenwick::{errors::*, traits::*};
 
@@ -112,7 +112,7 @@ impl_walker!{
     return_wrapper = safe_tree_select!(
         @virtual(
             self = self,
-            item = $[ret]
+            item = #[ret]
         )
     )
 }
@@ -123,7 +123,7 @@ impl_walker!{
     return_wrapper = safe_tree_select!(
         @stateful(
             self = self,
-            index = $[ret],
+            index = #[ret],
             mutators = &
         )
     )
@@ -135,7 +135,7 @@ impl_walker!{
     return_wrapper = safe_tree_select!(
         @stateful(
             self = self,
-            index = $[ret],
+            index = #[ret],
             mutators = &
         )
     )
@@ -148,7 +148,7 @@ impl_walker!{
         return_wrapper = safe_tree_select!(
             @stateful(
                 self = self,
-                index = $[ret],
+                index = #[ret],
                 mutators = &mut
             )
         )

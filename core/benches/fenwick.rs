@@ -50,9 +50,16 @@ fn bench_fenwick<const N: usize>(b: &mut Criterion) {
             });
         });
 
+        
         group.bench_with_input("log2_next_pow2_trailing_zeros", &next_val, | bencher, value | {
             bencher.iter(|| {
                 black_box((value.next_power_of_two()).trailing_zeros() as usize)
+            });
+        });
+
+        group.bench_with_input("log2_leading_zeros_invert", &next_val, | bencher, value | {
+            bencher.iter(|| {
+                black_box(usize::MAX - self.length().leading_zeros() as usize)
             });
         });
 

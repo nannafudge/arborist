@@ -38,7 +38,6 @@ macro_rules! safe_tree_select {
         if $index == 0 || $index >= $self.inner.length() {
             None
         } else {
-            println!("{:?}", $index);
             Some($($ref$($mut)?)? $self.inner[$index])
         }
     };
@@ -74,7 +73,7 @@ macro_rules! impl_walker {
     (@right($self:ident, $op:tt)) => {
         $self.view $op ($self.view.lsb << 1)
     };
-    (@peek($fn:ident, $($mut:ident,)? $output:ty, $wrap_ret:expr)) => {
+    (@peek($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker $($mut)? self, direction: Direction) -> Option<$output> {
             let index: usize = match direction {
                 Direction::Up => impl_walker!(@up(self, +, -)),
@@ -83,15 +82,15 @@ macro_rules! impl_walker {
                 Direction::Right => impl_walker!(@right(self, +)),
             };
 
-            interpolate_expr!($wrap_ret, ret => {index})
+            interpolate!(ret => {index}, $($wrap_ret)+)
         }
     };
-    (@probe($fn:ident, $($mut:ident,)? $output:ty, $wrap_ret:expr)) => {
+    (@probe($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker $($mut)? self, path: Self::Path) -> Option<$output> {
-            interpolate_expr!($wrap_ret, ret => {path})
+            interpolate!(ret => {path}, $($wrap_ret)+)
         }
     };
-    (@traverse($fn:ident, $output:ty, $wrap_ret:expr)) => {
+    (@traverse($fn:ident, $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker mut self, direction: Direction) -> Option<$output> {
             match direction {
                 Direction::Up => {
@@ -108,41 +107,41 @@ macro_rules! impl_walker {
                 },
             };
 
-            interpolate_expr!($wrap_ret, ret => {self.view.index})
+            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
         }
     };
-    (@seek($fn:ident, $output:ty, $wrap_ret:expr)) => {
+    (@seek($fn:ident, $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker mut self, path: Self::Path) -> Option<$output> {
             self.view.index = path;
             self.view.lsb = lsb(path);
-            interpolate_expr!($wrap_ret, ret => {self.view.index})
+            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
         }
     };
-    (@current($fn:ident, $($mut:ident,)? $output:ty, $wrap_ret:expr)) => {
+    (@current($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker $($mut)? self) -> Option<$output> {
-            interpolate_expr!($wrap_ret, ret => {self.view.index})
+            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
         }
     };
-    (@sibling($fn:ident, $($mut:ident,)? $output:ty, $wrap_ret:expr)) => {
+    (@sibling($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'walker $($mut)? self) -> Option<$output> {
             let sibling: usize = self.view.index ^ self.view.lsb << 1;
-            interpolate_expr!($wrap_ret, ret => {sibling})
+            interpolate!(ret => {sibling}, $($wrap_ret)+)
         }
     };
-    (type = $target_type:ident, output = $output:ty, return_wrapper = $wrap_ret:expr) => {
+    (type = $target_type:ident, output = $output:ty, return_wrapper = $($wrap_ret:tt)+) => {
         impl<'walker, 'tree, C> TreeWalker<'walker> for $target_type<'tree, C> where
             C: ?Sized + IndexedCollection,
             'tree: 'walker
         {
-            type Path = usize;
+            type Path = interpolate!{key => {usize}, #[key]};
             type Output = $output;
 
-            impl_walker!{@peek(peek, $output, $wrap_ret)}
-            impl_walker!{@probe(probe, $output, $wrap_ret)}
-            impl_walker!{@traverse(traverse, $output, $wrap_ret)}
-            impl_walker!{@seek(seek, $output, $wrap_ret)}
-            impl_walker!{@current(current, $output, $wrap_ret)}
-            impl_walker!{@sibling(sibling, $output, $wrap_ret)}
+            impl_walker!{@peek(peek, $output, $($wrap_ret)+)}
+            impl_walker!{@probe(probe, $output, $($wrap_ret)+)}
+            impl_walker!{@traverse(traverse, $output, $($wrap_ret)+)}
+            impl_walker!{@seek(seek, $output, $($wrap_ret)+)}
+            impl_walker!{@current(current, $output, $($wrap_ret)+)}
+            impl_walker!{@sibling(sibling, $output, $($wrap_ret)+)}
 
             fn reset(&'walker mut self) {
                 self.view.index = self.inner.length();

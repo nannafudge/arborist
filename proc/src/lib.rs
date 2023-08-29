@@ -2,9 +2,9 @@ mod length;
 mod interpolate;
 
 use length::ImplLength;
-use interpolate::InterpolateExpr;
+use interpolate::Interpolate;
 
-use syn::{Expr, parse_macro_input};
+use syn::parse_macro_input;
 use quote::{ToTokens, quote};
 
 #[proc_macro]
@@ -30,14 +30,13 @@ pub fn derive_length(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 }
 
 #[proc_macro]
-pub fn interpolate_expr(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parsed: InterpolateExpr = parse_macro_input!(input as InterpolateExpr);
+pub fn interpolate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: Interpolate = parse_macro_input!(input as Interpolate);
 
     let mut out = parsed.template.to_token_stream().to_string();
-    for (key, value) in &parsed.vals {
-        out = out.replace(&format!("$[{}]", key), &value.to_string());
+    for (key, value) in parsed.vals {
+        out = out.replace(&format!("#[{}]", key), &value.to_string());
     }
 
-    let expanded: Expr = syn::parse_str(&out).expect("Invalid template");
-    proc_macro::TokenStream::from(expanded.into_token_stream())
+    out.parse().expect("Invalid template")
 }

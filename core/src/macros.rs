@@ -26,11 +26,19 @@ macro_rules! unwrap_enum {
         }
     };
 }
+
 #[macro_export]
 macro_rules! require {
     ($($clause:expr)+, $err:expr) => {
         if !($($clause)+) {
             return Err($err);
         }
+    };
+}
+
+#[macro_export]
+macro_rules! escape_syntax {
+    ($($a:tt)*) => {
+        
     };
 }
