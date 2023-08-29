@@ -1,45 +1,46 @@
-use quote::format_ident;
-use crate::{NodeSide, NodeType, TreeWalker, escape_syntax};
+use arborist_proc::interpolate;
+
+use crate::{NodeSide, NodeType, TreeWalker, TreeWalkerMut};
 use crate::fenwick::{
     FenwickTreeWalker, VirtualTreeWalker, StatefulTreeWalker, StatefulTreeWalkerMut,
     IndexView, Direction, Length, lsb
 };
 
 macro_rules! impl_tests {
-    (peek($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let $($($mut)?)? collection: [usize; 16] = gen_collection();
-        let mut walker: $tw = <$tw>::new(&$($($mut)?)? collection, 1).unwrap();
-        
+    (peek($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
+
         // Up from 1 = 2
-        assert_eq!(walker.$fn_ident(Direction::Up), Some($($ref)? 2));
+        assert_eq!(walker.$fn_ident(Direction::Up), Some($($ref$($mut)?)? 2));
         // No elements beneath 1
         assert_eq!(walker.$fn_ident(Direction::Down), None);
         // 1 last in array, no elements to left
         assert_eq!(walker.$fn_ident(Direction::Left), None);
         // Right should be sibling
-        assert_eq!(walker.$fn_ident(Direction::Right), Some($($ref)? 3));
+        assert_eq!(walker.$fn_ident(Direction::Right), Some($($ref$($mut)?)? 3));
         
         // Shift to index 4
         walker.view.index = 4;
         walker.view.lsb = 4;
 
-        assert_eq!(walker.$fn_ident(Direction::Up), Some($($ref)? 8));
-        assert_eq!(walker.$fn_ident(Direction::Down), Some($($ref)? 2));
+        assert_eq!(walker.$fn_ident(Direction::Up), Some($($ref$($mut)?)? 8));
+        assert_eq!(walker.$fn_ident(Direction::Down), Some($($ref$($mut)?)? 2));
         assert_eq!(walker.$fn_ident(Direction::Left), None);
-        assert_eq!(walker.$fn_ident(Direction::Right), Some($($ref)? 12));
+        assert_eq!(walker.$fn_ident(Direction::Right), Some($($ref$($mut)?)? 12));
     };
-    (probe($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let collection: &$($($mut)?)?[usize] = &$($($mut)?)?gen_collection();
-        let walker: $tw = <$tw>::new($($($mut)?)? collection, 1).unwrap();
+    (probe($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let $($inner_mods)? walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
-        assert_eq!(walker.$fn_ident(4), Some($($ref)? 4));
-        assert_eq!(walker.$fn_ident(9), Some($($ref)? 9));
+        assert_eq!(walker.$fn_ident(4), Some($($ref$($mut)?)? 4));
+        assert_eq!(walker.$fn_ident(9), Some($($ref$($mut)?)? 9));
         assert_eq!(walker.$fn_ident(0), None);
         assert_eq!(walker.$fn_ident(walker.inner.length()), None);
     };
-    (traverse($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let collection: &[usize] = &gen_collection();
-        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
+    (traverse($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
         assert_eq!(walker.view, IndexView { index: 1, lsb: 1 });
 
@@ -72,20 +73,20 @@ macro_rules! impl_tests {
         assert_eq!(walker.$fn_ident(Direction::Right), None);
         assert_eq!(walker.$fn_ident(Direction::Up), None);
     };
-    (seek($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let collection: &$($($mut)?)?[usize] = &$($($mut)?)? gen_collection();
-        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
+    (seek($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
-        for i in 1..collection.len() {
+        for $($($mut)?)? i in 1..16 {
             assert_eq!(walker.$fn_ident(i), Some($($ref$($mut)?)? i));
         }
 
         assert_eq!(walker.$fn_ident(0), None);
         assert_eq!(walker.$fn_ident(walker.inner.length()), None);
     };
-    (current($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let collection: &[usize] = &gen_collection();
-        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
+    (current($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
         assert_eq!(walker.$fn_ident(), Some($($ref$($mut)?)? 1));
 
@@ -103,9 +104,9 @@ macro_rules! impl_tests {
         walker.view.lsb = 0;
         assert_eq!(walker.$fn_ident(), None);
     };
-    (sibling($fn_ident:ident, $tw:ty $(,$ref:tt$($mut:tt)?)?)) => {
-        let collection: &[usize] = &gen_collection();
-        let mut walker: $tw = <$tw>::new(collection, 1).unwrap();
+    (sibling($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        let $($inner_mods)? collection: [usize; 16] = gen_collection();
+        let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
         // Sibling at 1 should be 3
         assert_eq!(walker.$fn_ident(), Some($($ref$($mut)?)? 3));
@@ -127,23 +128,46 @@ macro_rules! impl_tests {
         walker.view.lsb = 0;
         assert_eq!(walker.sibling(), None);
     };
-    (impl $test_name:ident.$subtest:ident for $tw:ty: $fn_ident:ident $(where return = $ref:tt$($mut:tt)?)?) => {
+    (impl $test_name:ident.$subtest:ident for $tw:ty: $fn_ident:ident
+    $(where $(inner = $inner_mods:tt)? return = $ret_ref:tt$($ret_mut:tt)?)?) => {
         #[test]
         fn $test_name() {
-            impl_tests!{$subtest($fn_ident, $tw $(,$ref$($mut)?)?)}
+            impl_tests!{
+                $subtest($fn_ident, $tw)
+                $($(inner = $inner_mods)?)?
+                $(modifiers = $ret_ref$($ret_mut)?)?
+            }
         }
     };
-    ($name:tt for $tw:ident<$generics:ty> $(where return = $ref:tt $($mut:tt)?)?) => {
-        arborist_proc::interpolate!{
-            walker_type => { $tw<$generics> }
+    ($name:tt for $tw:ident<$generics:ty>
+    $(where $(inner = $inner_mods:tt)? $(return = $ret_ref:tt $($ret_mut:tt)?)?)?) => {
+        interpolate!{
             test_fn => { 
-                select(l => {$name} r => {
-                    format("#[a]_mut" a => {$name})
-                } s => { $($($mut)?)? })
+                select(
+                    left => {format("#[fn_name]_mut" fn_name => {$name})}
+                    right => {$name}
+                    selector => { $($($($ret_mut)?)?)? }
+                )
             }
-            test_name => { format("test_#[a]_#[b]_#[c]" a => {$tw} b => {$name} c => {$($($mut)?)?}) },
+            test_name => {
+                format(
+                    "test_#[ty]_#[method]" ty => {$tw}
+                    method => {
+                        select(
+                            left => {format("#[a]_mut" a => {$name})}
+                            right => {$name}
+                            selector => { $($($($ret_mut)?)?)? }
+                        )
+                    }
+                )
+            }
+            walker_type => {
+                format("#[ty]<#[generics]>" ty => {$tw} generics => {$generics})
+            },
             impl_tests!{
-                impl #[test_name].$name for #[walker_type]: #[test_fn] $(where return = $ref$($mut)?)?
+                impl #[test_name].$name
+                for #[walker_type]: #[test_fn]
+                $(where $(inner = $inner_mods)? $(return = $ret_ref $($ret_mut)?)?)?
             }
         }
     };
@@ -228,30 +252,44 @@ fn test_nodetype_conversion() {
     assert_eq!(NodeType::from(&IndexView::new(8)), NodeType::Node);
 }
 
+/*################################
+         TreeWalker Tests
+################################*/
+
 impl_tests!{peek for VirtualTreeWalker<[usize]>}
 impl_tests!{peek for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{peek for StatefulTreeWalkerMut<[usize]> where return = &}
-impl_tests!{peek for StatefulTreeWalkerMut<[usize]> where return = &mut}
+impl_tests!{peek for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
 
-/*impl_tests!{probe for VirtualTreeWalker<[usize]>}
+impl_tests!{probe for VirtualTreeWalker<[usize]>}
 impl_tests!{probe for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{probe for StatefulTreeWalkerMut<[usize]> where return = &mut}
+impl_tests!{probe for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
 
 impl_tests!{traverse for VirtualTreeWalker<[usize]>}
 impl_tests!{traverse for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{traverse for StatefulTreeWalkerMut<[usize]> where return = &mut}
+impl_tests!{traverse for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
 
 impl_tests!{seek for VirtualTreeWalker<[usize]>}
 impl_tests!{seek for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{seek for StatefulTreeWalkerMut<[usize]> where return = &mut}
+impl_tests!{seek for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
 
 impl_tests!{current for VirtualTreeWalker<[usize]>}
 impl_tests!{current for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{current for StatefulTreeWalkerMut<[usize]> where return = &mut}
+impl_tests!{current for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
 
 impl_tests!{sibling for VirtualTreeWalker<[usize]>}
 impl_tests!{sibling for StatefulTreeWalker<[usize]> where return = &}
-impl_tests!{sibling for StatefulTreeWalkerMut<[usize]> where return = &mut}*/
+impl_tests!{sibling for StatefulTreeWalkerMut<[usize]> where inner = mut return = &}
+
+/*################################
+        TreeWalkerMut Tests
+################################*/
+
+impl_tests!{peek for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
+impl_tests!{probe for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
+impl_tests!{traverse for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
+impl_tests!{seek for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
+impl_tests!{current for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
+impl_tests!{sibling for StatefulTreeWalkerMut<[usize]> where inner = mut return = &mut}
 
 #[cfg(feature = "fuzz")]
 mod fuzz {

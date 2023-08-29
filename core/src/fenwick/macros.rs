@@ -157,7 +157,7 @@ macro_rules! impl_walker {
         }
     };
     (@mut(type = $target_type:ident, output = $output:ty, return_wrapper = $wrap_ret:expr)) => {
-        impl<'walker, 'tree, C> TreeWalkerMut<'walker> for $target_type<'walker, C> where
+        impl<'walker, 'tree, C> TreeWalkerMut<'walker> for $target_type<'tree, C> where
             C: ?Sized + IndexedCollectionMut,
             'tree: 'walker
         {
