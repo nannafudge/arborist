@@ -6,23 +6,23 @@ pub mod traits;
 #[cfg(test)]
 mod tests;
 
+use core::marker::PhantomData;
+use core::ops::{
+    BitOr, BitOrAssign,
+    BitXor, BitXorAssign,
+    BitAnd, BitAndAssign,
+    AddAssign, SubAssign,
+    Add, Sub
+};
 use crate::{
     Height,  Direction,
     NodeSide, NodeType,
     TreeWalker, TreeWalkerMut,
-    require
+    Tree, TreeMut, require
 };
-use core::{
-    marker::PhantomData,
-    ops::{
-        BitOr, BitOrAssign,
-        BitXor, BitXorAssign,
-        BitAnd, BitAndAssign,
-        AddAssign, SubAssign,
-        Add, Sub
-    }
+use arborist_proc::{
+    Length, interpolate, length_method
 };
-use arborist_proc::interpolate;
 
 pub use crate::fenwick::{errors::*, traits::*};
 
@@ -96,92 +96,69 @@ impl IndexView {
     }
 }
 
-// Assignment operands update index/view lsb upon assignment
-impl_op!{BitOr<usize>, bitor, |, usize}
-impl_op!{BitXor<usize>, bitxor, ^, usize}
-impl_op!{BitAnd<usize>, bitand, &, usize}
-impl_op!{Add<usize>, add, +, usize}
-impl_op!{Sub<usize>, sub, -, usize}
-impl_op_assign!{BitOrAssign<usize>, bitor_assign, |=, usize}
-impl_op_assign!{BitXorAssign<usize>, bitxor_assign, ^=, usize}
-impl_op_assign!{BitAndAssign<usize>, bitand_assign, &=, usize}
-impl_op_assign!{AddAssign<usize>, add_assign, +=, usize}
-impl_op_assign!{SubAssign<usize>, sub_assign, -=, usize}
-
 /*################################
            Tree Walkers
 ################################*/
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct FenwickTreeWalker<C, O> {
-    inner: C,
-    pub view: IndexView,
-    marker: PhantomData<O>
+#[derive(Debug, Clone, PartialEq, Length)]
+#[length_method("self.length")]
+pub struct VirtualTreeView {
+    length: usize,
+    pub view: IndexView
 }
 
-pub type VirtualTreeWalker<'tree, C> = FenwickTreeWalker<&'tree C, usize>;
-pub type StatefulTreeWalker<'tree, C> = FenwickTreeWalker<&'tree C, &'tree C>;
-pub type StatefulTreeWalkerMut<'tree, C> = FenwickTreeWalker<&'tree mut C, &'tree mut C>;
+#[derive(Debug, Clone, PartialEq, Length)]
+#[length_method("self.inner.length()")]
+pub struct StatefulTreeView<'a, C: ?Sized + Length> {
+    inner: &'a C,
+    pub view: IndexView
+}
 
-impl<C: Length, O> FenwickTreeWalker<C, O> {
-    fn new(inner: C, index: usize) -> Result<FenwickTreeWalker<C, O>, FenwickTreeError> {
-        require!(index > 0, FenwickTreeError::OutOfBounds(index, inner.length()));
+#[derive(Debug, PartialEq, Length)]
+#[length_method("self.inner.length()")]
+pub struct StatefulTreeViewMut<'a, C: ?Sized + Length> {
+    inner: &'a mut C,
+    pub view: IndexView
+}
+
+impl VirtualTreeView {
+    pub fn new(inner: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
+        let length: usize = inner.length();
+        require!(index > 0 && index < length, FenwickTreeError::OutOfBounds);
 
         Ok(Self {
-            inner: inner,
-            view: IndexView::new(index),
-            marker: PhantomData
+            length: length,
+            view: IndexView::new(index)
         })
     }
 }
 
-impl_walker!{
-    type = VirtualTreeWalker,
-    output = usize,
-    return_wrapper = safe_tree_select!(
-        @virtual(
-            self = self,
-            item = #[ret]
-        )
-    )
+impl<'a, C> StatefulTreeView<'a, C> where
+    C: ?Sized + IndexedCollection,
+    C::Output: Sized
+{
+    pub fn new(inner: &'a C, index: usize) -> Result<Self, FenwickTreeError> {
+        require!(index > 0 && index < inner.length(), FenwickTreeError::OutOfBounds);
+
+        Ok(Self {
+            inner: inner,
+            view: IndexView::new(index)
+        })
+    }
 }
 
-impl_walker!{
-    type = StatefulTreeWalker,
-    output = &'walker C::Output,
-    return_wrapper = safe_tree_select!(
-        @stateful(
-            self = self,
-            index = #[ret],
-            mutators = &
-        )
-    )
-}
+impl<'a, C> StatefulTreeViewMut<'a, C> where
+    C: ?Sized + IndexedCollectionMut,
+    C::Output: Sized
+{
+    pub fn new(inner: &'a mut C, index: usize) -> Result<Self, FenwickTreeError> {
+        require!(index > 0 && index < inner.length(), FenwickTreeError::OutOfBounds);
 
-impl_walker!{
-    type = StatefulTreeWalkerMut,
-    output = &'walker C::Output,
-    return_wrapper = safe_tree_select!(
-        @stateful(
-            self = self,
-            index = #[ret],
-            mutators = &
-        )
-    )
-}
-
-impl_walker!{
-    @mut(
-        type = StatefulTreeWalkerMut,
-        output = &'walker mut C::Output,
-        return_wrapper = safe_tree_select!(
-            @stateful(
-                self = self,
-                index = #[ret],
-                mutators = &mut
-            )
-        )
-    )
+        Ok(Self {
+            inner: inner,
+            view: IndexView::new(index)
+        })
+    }
 }
 
 /*################################
@@ -227,4 +204,45 @@ impl From<&IndexView> for NodeType {
             _ => panic!("Invariant")
         }
     }
+}
+
+/*################################
+           Macro Impls
+################################*/
+
+impl_op!{BitOr<usize>, bitor, |, usize}
+impl_op!{BitXor<usize>, bitxor, ^, usize}
+impl_op!{BitAnd<usize>, bitand, &, usize}
+impl_op!{Add<usize>, add, +, usize}
+impl_op!{Sub<usize>, sub, -, usize}
+impl_op_assign!{BitOrAssign<usize>, bitor_assign, |=, usize}
+impl_op_assign!{BitXorAssign<usize>, bitxor_assign, ^=, usize}
+impl_op_assign!{BitAndAssign<usize>, bitand_assign, &=, usize}
+impl_op_assign!{AddAssign<usize>, add_assign, +=, usize}
+impl_op_assign!{SubAssign<usize>, sub_assign, -=, usize}
+
+impl_walker!{
+    type = VirtualTreeView,
+    output = Result<usize, FenwickTreeError>,
+    return_wrapper = Ok(#[ret])
+}
+
+impl_walker!{
+    type = StatefulTreeView,
+    output = Result<&'w C::Output, FenwickTreeError>,
+    return_wrapper = Ok(&self.inner[#[ret]])
+}
+
+impl_walker!{
+    type = StatefulTreeViewMut,
+    output = Result<&'w C::Output, FenwickTreeError>,
+    return_wrapper = Ok(&self.inner[#[ret]])
+}
+
+impl_walker!{
+    @mut(
+        type = StatefulTreeViewMut,
+        output = Result<&'w mut C::Output, FenwickTreeError>,
+        return_wrapper = Ok(&mut self.inner[#[ret]])
+    )
 }
