@@ -166,17 +166,18 @@ macro_rules! impl_walker {
         }
     };
     (type = $target_type:ident, output = $output:ty, return_wrapper = $($wrap_ret:tt)+) => {
-        impl<'w, 't, C> TreeWalker<'w> for $target_type<'t, C> where
-            C: ?Sized + IndexedCollection + 't,
-            C::Output: Sized + 't,
+        impl<'t, 'w, C> TreeWalker<'w> for $target_type<'t, C> where
+            C: ?Sized + IndexedCollection,
+            C::Output: Sized,
             't: 'w
         {
             impl_walker!{body(output = $output, return_wrapper = $($wrap_ret)+)}
         }
     };
     (@mut(type = $target_type:ident, output = $output:ty, return_wrapper = $($wrap_ret:tt)+)) => {
-        impl<'w, 't, C> TreeWalkerMut<'w> for $target_type<'t, C> where
-            C: ?Sized + IndexedCollectionMut, C::Output: Sized,
+        impl<'t, 'w, C> TreeWalkerMut<'w> for $target_type<'t, C> where
+            C: ?Sized + IndexedCollectionMut,
+            C::Output: Sized,
             't: 'w
         {
             type OutputMut = $output;

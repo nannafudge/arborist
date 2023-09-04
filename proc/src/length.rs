@@ -1,24 +1,38 @@
 use proc_macro2::TokenStream;
-use syn::{
-    Generics, Type, Result, Token,
-    parse::{ParseStream, Parse}
+use quote::{
+    ToTokens, quote
 };
-use quote::{quote, ToTokens};
+use syn::{
+    Result, Generics, Ident,
+    parse::{ParseStream, Parse},
+};
+use super::{
+    extract_impl_generics,
+    extract_ty_and_where_generics
+};
 
 #[derive(Clone)]
 pub(crate) struct ImplLength {
-    pub generics: TokenStream,
-    pub ty: Type,
+    pub impl_generics: TokenStream,
+    pub ty_generics: TokenStream,
+    pub where_clause: TokenStream,
+    pub name: TokenStream,
 }
 
 impl Parse for ImplLength {
     fn parse(input: ParseStream) -> Result<Self> {
-        let generics: Generics = input.parse()?;
-        input.parse::<Token![,]>()?;
-
+        let impl_generics = extract_impl_generics(input.parse::<Generics>().ok().as_ref());
+        let name: TokenStream = if let Ok(ident) = input.parse::<Ident>() {
+            ident.to_token_stream()
+        } else {
+            input.parse::<syn::Type>()?.to_token_stream()
+        };
+        let (ty_generics, where_clause) = extract_ty_and_where_generics(input.parse::<Generics>().ok().as_ref());
         Ok(Self {
-            generics: generics.to_token_stream(),
-            ty: input.parse()?
+            impl_generics: impl_generics,
+            ty_generics: ty_generics,
+            where_clause: where_clause,
+            name: name
         })
     }
 }
@@ -59,12 +73,15 @@ impl From<String> for LengthOverride {
     }
 }
 
+// Type generics are embedded within the Type definition itself
 pub(crate) fn render_impl(parsed: ImplLength, method: LengthOverride) -> proc_macro::TokenStream {
-    let generics = parsed.generics;
-    let ty = parsed.ty;
+    let impl_generics = parsed.impl_generics;
+    let ty_generics = parsed.ty_generics;
+    let where_clause = parsed.where_clause;
+    let name = parsed.name;
 
     let expanded: proc_macro2::TokenStream = quote! {
-        impl #generics Length for #ty {
+        impl #impl_generics Length for #name #ty_generics #where_clause {
             fn length(&self) -> usize {
                 #method
             }

@@ -6,7 +6,6 @@ pub mod traits;
 #[cfg(test)]
 mod tests;
 
-use core::marker::PhantomData;
 use core::ops::{
     BitOr, BitOrAssign,
     BitXor, BitXorAssign,
@@ -18,7 +17,7 @@ use crate::{
     Height,  Direction,
     NodeSide, NodeType,
     TreeWalker, TreeWalkerMut,
-    Tree, TreeMut, require
+    require
 };
 use arborist_proc::{
     Length, interpolate, length_method
@@ -30,7 +29,7 @@ pub use crate::fenwick::{errors::*, traits::*};
             Functions
 ################################*/
 
-#[cfg(any(feature = "no_float", feature = "fuzz"))]
+#[cfg(any(feature = "no_float", feature = "proptest"))]
 pub(crate) mod compat {
     const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
 

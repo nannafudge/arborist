@@ -10,23 +10,23 @@ pub trait Height {
 }
 
 // Awaiting chalk support for nested associated type expansion...
-pub trait Tree: Height {
+pub trait Tree<'t>: Height {
     type Key;
     type Value;
     type Error;
 
-    fn get(&self, key: &Self::Key) -> Result<&Self::Value, Self::Error>;
-    fn contains(&self, key: &Self::Key) -> Result<bool, Self::Error>;
-    fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<&Self::Value, Self::Error>;
-    fn update(&mut self, key: &Self::Key, value: Self::Value) -> Result<&Self::Value, Self::Error>;
-    fn delete(&mut self, key: &Self::Key, value: Self::Value) -> Result<&Self::Value, Self::Error>;
+    fn get(&'t self, key: &Self::Key) -> Result<&'t Self::Value, Self::Error>;
+    fn contains(&'t self, key: &Self::Key) -> Result<bool, Self::Error>;
+    fn insert(&'t mut self, key: &Self::Key, value: Self::Value) -> Result<&'t Self::Value, Self::Error>;
+    fn update(&'t mut self, key: &Self::Key, value: Self::Value) -> Result<&'t Self::Value, Self::Error>;
+    fn delete(&'t mut self, key: &Self::Key, value: Self::Value) -> Result<Self::Value, Self::Error>;
 
-    fn push(&mut self, value: Self::Value) -> Result<&Self::Value, Self::Error>;
-    fn pop(&mut self, key: &Self::Key) -> Result<&Self::Value, Self::Error>;
+    fn push(&'t mut self, value: Self::Value) -> Result<&'t Self::Value, Self::Error>;
+    fn pop(&'t mut self, key: &Self::Key) -> Result<&'t Self::Value, Self::Error>;
 }
 
-pub trait TreeMut: Tree {
-    fn get_mut(&mut self, key: &Self::Key) -> Result<&mut Self::Value, Self::Error>;
+pub trait TreeMut<'t>: Tree<'t> {
+    fn get_mut(&'t mut self, key: &Self::Key) -> Result<&'t mut Self::Value, Self::Error>;
 }
 
 /*################################

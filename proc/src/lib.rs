@@ -1,15 +1,33 @@
 mod length;
+mod collection;
 mod interpolate;
 
-use length::{ImplLength, LengthOverride};
+use collection::ImplInsertable;
 use interpolate::Interpolate;
+use length::{
+    ImplLength, LengthOverride
+};
 
 use proc_macro2::TokenStream;
-use syn::{
-    parse_macro_input, DeriveInput,
-    parse::Parse
-};
 use quote::ToTokens;
+use syn::{
+    parse::Parse, parse_macro_input,
+    DeriveInput, Generics
+};
+
+pub(crate) fn extract_impl_generics(generics: Option<&Generics>) -> TokenStream {
+    generics.and_then(| generics | {
+        let (impl_generics, _, _) = generics.split_for_impl();
+        Some(impl_generics.to_token_stream())
+    }).unwrap_or_default()
+}
+
+pub(crate) fn extract_ty_and_where_generics(generics: Option<&Generics>) -> (TokenStream, TokenStream) {
+    generics.and_then(| generics | {
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        Some((ty_generics.to_token_stream(), where_clause.to_token_stream()))
+    }).unwrap_or_default()
+}
 
 #[proc_macro_attribute]
 pub fn length_method(_: proc_macro::TokenStream, target: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -25,10 +43,6 @@ pub fn impl_length(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_derive(Length)]
 pub fn derive_length(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let parsed: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let (impl_generics, ty_generics, _) = parsed.generics.split_for_impl();
-    let mut ty_raw: TokenStream = TokenStream::new();
-    parsed.ident.to_tokens(&mut ty_raw);
-    ty_generics.to_tokens(&mut ty_raw);
 
     let method_attr_idx: usize = parsed.attrs.binary_search_by(| attr | {
         let name: String = attr.path().get_ident().and_then(|attr| Some(attr.to_string())).unwrap_or_default();
@@ -39,12 +53,37 @@ pub fn derive_length(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         attr.parse_args_with(LengthOverride::parse).ok()
     }).unwrap_or_default();
 
+    let (impl_generics, ty_generics, where_clause) = parsed.generics.split_for_impl();
+
     length::render_impl(
         ImplLength {
-            generics: impl_generics.to_token_stream(),
-            ty: syn::parse2(ty_raw).expect("Invalid type")
+            impl_generics: impl_generics.to_token_stream(),
+            ty_generics: ty_generics.to_token_stream(),
+            where_clause: where_clause.to_token_stream(),
+            name: parsed.ident.to_token_stream()
         },
         method
+    )
+}
+
+#[proc_macro]
+pub fn impl_insertable_collection(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: ImplInsertable = parse_macro_input!(input as ImplInsertable);
+    collection::render_impl_insertable(parsed)
+}
+
+#[proc_macro_derive(InsertableCollection)]
+pub fn derive_insertable_collection(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: DeriveInput = parse_macro_input!(input as DeriveInput);
+    let (impl_generics, ty_generics, where_clause) = parsed.generics.split_for_impl();
+
+    collection::render_impl_insertable(
+        ImplInsertable {
+            impl_generics: impl_generics.to_token_stream(),
+            ty_generics: ty_generics.to_token_stream(),
+            where_clause: where_clause.to_token_stream(),
+            name: parsed.ident
+        }
     )
 }
 

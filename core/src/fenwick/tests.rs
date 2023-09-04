@@ -4,10 +4,9 @@ use crate::{
     TreeWalker, TreeWalkerMut
 };
 use crate::fenwick::{
-    IndexView, VirtualTreeView,
-    StatefulTreeView, StatefulTreeViewMut,
-    Direction, Height, Length, lsb,
-    FenwickTreeError
+    FenwickTreeError, lsb,
+    Direction, Height, Length, IndexView,
+    VirtualTreeView, StatefulTreeView, StatefulTreeViewMut
 };
 
 use core::cell::RefCell;
@@ -83,7 +82,7 @@ macro_rules! impl_tests {
         assert_eq!(walker.length(), 32);
         assert_length_calls!($tw, mock_ref, 2);
     };
-    // True testing of height() is performed in fuzz tests
+    // True testing of height() is performed in proptests
     (height($fn_ident:ident, $tw:ty) $(inner = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
         let mut collection: MockCollection = MockCollection::new(32);
         let mock_ref: *mut MockCollection = &mut collection as *mut MockCollection;
@@ -386,8 +385,8 @@ impl_tests!{seek for StatefulTreeViewMut<[usize]> where inner = mut return = &mu
 impl_tests!{current for StatefulTreeViewMut<[usize]> where inner = mut return = &mut}
 impl_tests!{sibling for StatefulTreeViewMut<[usize]> where inner = mut return = &mut}
 
-#[cfg(feature = "fuzz")]
-mod fuzz {
+#[cfg(feature = "proptest")]
+mod proptest {
     use proptest::prelude::*;
     use crate::fenwick::{compat::log2_bin, Height};
 

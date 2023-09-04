@@ -1,8 +1,15 @@
+use syn::{
+    Result, LitStr,
+    Token
+};
+use syn::parse::{
+    ParseStream, ParseBuffer, Parse
+};
+use proc_macro2::{
+    TokenTree, TokenStream,
+    Delimiter, Ident
+};
 use std::collections::BTreeMap;
-
-use syn::{Result, Token, LitStr};
-use syn::parse::{ParseStream, ParseBuffer, Parse};
-use proc_macro2::{Ident, Delimiter, TokenTree, TokenStream};
 use quote::ToTokens;
 
 #[inline]
