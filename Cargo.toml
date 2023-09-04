@@ -7,7 +7,7 @@ edition = "2021"
 
 [features]
 bench = ["arborist-core/bench"]
-fuzz = ["arborist-core/fuzz"]
+proptest = ["arborist-core/proptest"]
 no_std = ["bumpalo", "arborist-core/no_std"]
 no_float = ["arborist-core/no_float"]
 default = []

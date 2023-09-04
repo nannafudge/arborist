@@ -1,13 +1,13 @@
 use arborist_proc::{Length, length_method};
 use arborist_core::fenwick::{
     Length,
-    IndexedCollection, IndexedCollectionMut,
-    VirtualTreeView, FenwickTreeError, StatefulTreeView
+    InsertableCollection, IndexedCollectionMut,
+    VirtualTreeView, FenwickTreeError
 };
 use arborist_core::{
     Tree, Height,
     TreeWalker,
-    Direction, NodeSide, TreeMut
+    Direction, NodeSide, TreeMut, require
 };
 
 use core::cmp::Ordering;
@@ -17,18 +17,14 @@ use bumpalo::Vec;
 #[cfg(not(feature = "no_std"))]
 use std::vec::Vec;
 
+#[derive(Length)]
+#[length_method("self.inner.length()")]
 pub struct BTreeSet<C: Height>  {
     inner: C
 }
 
-impl<C: Length> Length for BTreeSet<C> {
-    fn length(&self) -> usize {
-        self.inner.length()
-    }
-}
-
-impl<C> Tree for BTreeSet<C> where
-    C: IndexedCollection,
+impl<'t, C> Tree<'t> for BTreeSet<C> where
+    C: InsertableCollection,
     C::Output: Sized + PartialEq + PartialOrd
 {
     type Key = C::Output;
@@ -48,33 +44,43 @@ impl<C> Tree for BTreeSet<C> where
 
     fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<&C::Output, BTreeError> {
         let mut walker: BTreeWalker<C> = BTreeWalker::new(&self.inner)?;
-        let _ = walker.find(key);
+        let index: usize = walker.find(key)?;
 
-        todo!()
+        self.inner.insert(index, value);
+        Ok(&self.inner[index])
     }
 
     fn update(&mut self, key: &Self::Key, value: Self::Value) -> Result<&C::Output, BTreeError> {
-        todo!()
+        let current = self.get_mut(key)?;
+        *current = value;
+
+        Ok(current)
     }
 
-    fn delete(&mut self, key: &Self::Key, value: Self::Value) -> Result<&C::Output, BTreeError> {
-        todo!()
+    fn delete(&mut self, key: &Self::Key, value: Self::Value) -> Result<C::Output, BTreeError> {
+        let mut walker: BTreeWalker<C> = BTreeWalker::new(&self.inner)?;
+        let index: usize = walker.find(key)?;
+
+        Ok(self.inner.remove(index))
     }
 
     fn push(&mut self, value: Self::Value) -> Result<&C::Output, BTreeError> {
-        todo!()
+        self.inner.insert(1, value);
+        Ok(&self.inner[1])
     }
 
     fn pop(&mut self, key: &Self::Key) -> Result<&C::Output, BTreeError> {
-        todo!()
+        require!(self.inner.length() > 1, BTreeError::Inner(FenwickTreeError::Empty));
+
+        Ok(&self.inner.remove(self.inner.length() - 1))
     }
 }
 
-impl<C> TreeMut for BTreeSet<C> where
-    C: IndexedCollectionMut,
+impl<'t, C> TreeMut<'t> for BTreeSet<C> where
+    C: InsertableCollection,
     C::Output: Sized + PartialEq + PartialOrd
 {
-    fn get_mut(&mut self, key: &Self::Key) -> Result<&mut Self::Value, Self::Error> {
+    fn get_mut(&'t mut self, key: &Self::Key) -> Result<&'t mut Self::Value, Self::Error> {
         let mut walker: BTreeWalker<C> = BTreeWalker::new(&self.inner)?;
         let index: usize = walker.find(key).map_err(|_| BTreeError::KeyNotFound)?;
         Ok(&mut self.inner[index])
@@ -87,7 +93,7 @@ struct BTreeWalker<'w, C: Length> {
 }
 
 impl<'w, C> BTreeWalker<'w, C> where
-    C: IndexedCollection,
+    C: InsertableCollection,
     C::Output: Sized + PartialOrd
 {
     pub fn new(inner: &'w C) -> Result<Self, BTreeError> {
