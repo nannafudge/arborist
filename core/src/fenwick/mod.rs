@@ -1,7 +1,8 @@
-#[macro_use]
-pub mod macros;
 pub mod errors;
 pub mod traits;
+
+#[macro_use]
+mod macros;
 
 #[cfg(test)]
 mod tests;
@@ -23,7 +24,7 @@ use arborist_proc::{
     Length, interpolate, length_method
 };
 
-pub use crate::fenwick::{errors::*, traits::*};
+pub use self::{errors::*, traits::*};
 
 /*################################
             Functions
@@ -95,39 +96,48 @@ impl IndexView {
     }
 }
 
+impl PartialEq<usize> for IndexView {
+    fn eq(&self, other: &usize) -> bool {
+        &self.index == other
+    }
+}
+
 /*################################
            Tree Walkers
 ################################*/
 
 #[derive(Debug, Clone, PartialEq, Length)]
-#[length_method("self.length")]
+#[length_method(self.length)]
 pub struct VirtualTreeView {
     length: usize,
-    pub view: IndexView
+    pub inner: IndexView
 }
 
 #[derive(Debug, Clone, PartialEq, Length)]
-#[length_method("self.inner.length()")]
+#[length_method(self.collection.length())]
 pub struct StatefulTreeView<'a, C: ?Sized + Length> {
-    inner: &'a C,
-    pub view: IndexView
+    collection: &'a C,
+    pub inner: IndexView
 }
 
 #[derive(Debug, PartialEq, Length)]
-#[length_method("self.inner.length()")]
+#[length_method(self.collection.length())]
 pub struct StatefulTreeViewMut<'a, C: ?Sized + Length> {
-    inner: &'a mut C,
-    pub view: IndexView
+    collection: &'a mut C,
+    pub inner: IndexView
 }
 
 impl VirtualTreeView {
-    pub fn new(inner: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
-        let length: usize = inner.length();
-        require!(index > 0 && index < length, FenwickTreeError::OutOfBounds);
+    pub fn new(collection: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
+        let length: usize = collection.length();
+        require!(
+            index > 0 && index < length,
+            FenwickTreeError::OutOfBoundsFor{ index: index, length: length }
+        );
 
         Ok(Self {
-            length: length,
-            view: IndexView::new(index)
+            length,
+            inner: IndexView::new(index)
         })
     }
 }
@@ -136,12 +146,15 @@ impl<'a, C> StatefulTreeView<'a, C> where
     C: ?Sized + IndexedCollection,
     C::Output: Sized
 {
-    pub fn new(inner: &'a C, index: usize) -> Result<Self, FenwickTreeError> {
-        require!(index > 0 && index < inner.length(), FenwickTreeError::OutOfBounds);
+    pub fn new(collection: &'a C, index: usize) -> Result<Self, FenwickTreeError> {
+        require!(
+            index > 0 && index < collection.length(),
+            FenwickTreeError::OutOfBoundsFor{ index: index, length: collection.length() }
+        );
 
         Ok(Self {
-            inner: inner,
-            view: IndexView::new(index)
+            collection,
+            inner: IndexView::new(index)
         })
     }
 }
@@ -150,12 +163,15 @@ impl<'a, C> StatefulTreeViewMut<'a, C> where
     C: ?Sized + IndexedCollectionMut,
     C::Output: Sized
 {
-    pub fn new(inner: &'a mut C, index: usize) -> Result<Self, FenwickTreeError> {
-        require!(index > 0 && index < inner.length(), FenwickTreeError::OutOfBounds);
+    pub fn new(collection: &'a mut C, index: usize) -> Result<Self, FenwickTreeError> {
+        require!(
+            index > 0 && index < collection.length(),
+            FenwickTreeError::OutOfBoundsFor { index: index, length: collection.length() }
+        );
 
         Ok(Self {
-            inner: inner,
-            view: IndexView::new(index)
+            collection,
+            inner: IndexView::new(index)
         })
     }
 }
@@ -229,19 +245,19 @@ impl_walker!{
 impl_walker!{
     type = StatefulTreeView,
     output = Result<&'w C::Output, FenwickTreeError>,
-    return_wrapper = Ok(&self.inner[#[ret]])
+    return_wrapper = Ok(&self.collection[#[ret]])
 }
 
 impl_walker!{
     type = StatefulTreeViewMut,
     output = Result<&'w C::Output, FenwickTreeError>,
-    return_wrapper = Ok(&self.inner[#[ret]])
+    return_wrapper = Ok(&self.collection[#[ret]])
 }
 
 impl_walker!{
     @mut(
         type = StatefulTreeViewMut,
         output = Result<&'w mut C::Output, FenwickTreeError>,
-        return_wrapper = Ok(&mut self.inner[#[ret]])
+        return_wrapper = Ok(&mut self.collection[#[ret]])
     )
 }

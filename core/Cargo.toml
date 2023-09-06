@@ -10,16 +10,16 @@ bench = ["dep:criterion", "dep:rand"]
 proptest = ["dep:proptest"]
 
 const_vec = ["dep:tinyvec"]
-no_std = ["const_vec", "dep:bumpalo"]
+bumpalo_vec = ["dep:bumpalo"]
+std_vec = []
 no_float = []
-default = ["const_vec"]
+default = ["const_vec", "std_vec"]
 
 [dependencies]
 arborist-proc = { version = "0.1.0", path = "../proc" }
-tinyvec = { version = "1.6.0", optional = true }
 bumpalo = { version = "3.13.0", optional = true }
-
-#[dev-dependencies]
+tinyvec = { version = "1.6.0", optional = true }
+# Dev
 proptest = { version = "1.2.0", optional = true }
 criterion = { version = "0.3.6", optional = true }
 rand = { version = "0.8.5", features = ["small_rng"], optional = true }

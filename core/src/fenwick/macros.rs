@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! impl_op {
     ($trait:ty, $fn:ident, $op:tt, $rhs:ty) => {
         impl $trait for IndexView {
@@ -11,7 +10,6 @@ macro_rules! impl_op {
     };
 }
 
-#[macro_export]
 macro_rules! impl_op_assign {
     ($trait:ty, $fn:ident, $op:tt, $rhs:ty) => {
         impl $trait for IndexView {
@@ -23,51 +21,38 @@ macro_rules! impl_op_assign {
     };
 }
 
-#[macro_export]
-macro_rules! safe_tree_select {
-    // wrap_ret for VirtualTreeView
-    (@virtual(self = $self:tt, item = $eval:expr)) => {
-        Ok($eval)
-    };
-    // wrap_ret for StatefulTreeViews
-    (@stateful(self = $self:tt, index = $index:expr, mutators = $($ref:tt$($mut:tt)?)?)) => {
-        Ok($($ref$($mut)?)? $self.inner[$index])
-    };
-}
-
 /*################################
             Tree Walker
 ################################*/
 
-#[macro_export]
 macro_rules! impl_walker {
     (@up($self:ident, $op_left:tt, $op_right:tt)) => {
         // Current LSB + 1 cannot exceed height of the tree (lsb <> log2(tree_len))
-        require!($self.view.lsb < $self.length() >> 1, FenwickTreeError::OutOfBounds);
+        require!($self.inner.lsb < $self.length() >> 1, FenwickTreeError::OutOfBounds);
         // Transition upward to next 'lsb namespace'
-        match NodeSide::from($self.view.index) {
-            NodeSide::Left => $self.view $op_left $self.view.lsb,
-            NodeSide::Right => $self.view $op_right $self.view.lsb
+        match NodeSide::from($self.inner.index) {
+            NodeSide::Left => $self.inner $op_left $self.inner.lsb,
+            NodeSide::Right => $self.inner $op_right $self.inner.lsb
         }
     };
     (@down($self:ident, $side:ident, $op_left:tt, $op_right:tt)) => {
         // Current LSB - 1 cannot be zero, lowest height level of a tree is 1
-        require!($self.view.lsb > 1, FenwickTreeError::OutOfBounds);
+        require!($self.inner.lsb > 1, FenwickTreeError::OutOfBounds);
         // Transition downward to next 'lsb namespace'
         match $side {
-            NodeSide::Left => $self.view $op_left ($self.view.lsb >> 1),
-            NodeSide::Right => $self.view $op_right ($self.view.lsb >> 1)
+            NodeSide::Left => $self.inner $op_left ($self.inner.lsb >> 1),
+            NodeSide::Right => $self.inner $op_right ($self.inner.lsb >> 1)
         }
     };
     (@left($self:ident, $op:tt)) => {
         // LSB is equivalent to furthermost left node of the tree
-        require!($self.view.index != $self.view.lsb, FenwickTreeError::OutOfBounds);
-        $self.view.index $op ($self.view.lsb << 1)
+        require!($self.inner.index != $self.inner.lsb, FenwickTreeError::OutOfBounds);
+        $self.inner.index $op ($self.inner.lsb << 1)
     };
     (@right($self:ident, $op:tt)) => {
         // Index + LSB cannot be greater than the length of the tree
-        require!($self.length() - $self.view.index > $self.view.lsb, FenwickTreeError::OutOfBounds);
-        $self.view $op ($self.view.lsb << 1)
+        require!($self.length() - $self.inner.index > $self.inner.lsb, FenwickTreeError::OutOfBounds);
+        $self.inner $op ($self.inner.lsb << 1)
     };
     (@peek($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'w $($mut)? self, direction: Direction) -> $output {
@@ -112,27 +97,27 @@ macro_rules! impl_walker {
                 },
             };
 
-            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
+            interpolate!(ret => {self.inner.index}, $($wrap_ret)+)
         }
     };
     (@seek($fn:ident, $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'w mut self, path: Self::Path) -> $output {
             require!(path > 0 && path < self.length(), FenwickTreeError::OutOfBounds);
 
-            self.view.index = path;
-            self.view.lsb = lsb(path);
-            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
+            self.inner.index = path;
+            self.inner.lsb = lsb(path);
+            interpolate!(ret => {self.inner.index}, $($wrap_ret)+)
         }
     };
     (@current($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'w $($mut)? self) -> $output {
-            require!(self.view.index > 0 && self.view.index < self.length(), FenwickTreeError::OutOfBounds);
-            interpolate!(ret => {self.view.index}, $($wrap_ret)+)
+            require!(self.inner.index > 0 && self.inner.index < self.length(), FenwickTreeError::OutOfBounds);
+            interpolate!(ret => {self.inner.index}, $($wrap_ret)+)
         }
     };
     (@sibling($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
         fn $fn(&'w $($mut)? self) -> $output {
-            let sibling: usize = self.view.index ^ self.view.lsb << 1;
+            let sibling: usize = self.inner.index ^ self.inner.lsb << 1;
             require!(sibling > 0 && sibling < self.length(), FenwickTreeError::OutOfBounds);
             interpolate!(ret => {sibling}, $($wrap_ret)+)
         }
@@ -149,15 +134,15 @@ macro_rules! impl_walker {
         impl_walker!{@sibling(sibling, $output, $($wrap_ret)+)}
 
         fn reset(&mut self) {
-            self.view.index = self.length();
+            self.inner.index = self.length();
         }
 
         fn type_(&self) -> NodeType {
-            NodeType::from(&self.view)
+            NodeType::from(&self.inner)
         }
 
         fn side(&self) -> NodeSide {
-            NodeSide::from(&self.view)
+            NodeSide::from(&self.inner)
         }
     };
     (type = VirtualTreeView, output = $output:ty, return_wrapper = $($wrap_ret:tt)+) => {

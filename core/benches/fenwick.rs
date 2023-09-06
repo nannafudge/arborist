@@ -6,8 +6,6 @@ use criterion::{
 use rand::{SeedableRng, RngCore};
 use rand::rngs::{SmallRng, OsRng};
 
-use arborist_core::fenwick::traits::test_impls::*;
-
 const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
 
 #[inline(always)]
@@ -59,7 +57,7 @@ fn bench_fenwick<const N: usize>(b: &mut Criterion) {
 
         group.bench_with_input("log2_leading_zeros_invert", &next_val, | bencher, value | {
             bencher.iter(|| {
-                black_box(usize::MAX - self.length().leading_zeros() as usize)
+                black_box(usize::MAX - value.leading_zeros() as usize)
             });
         });
 
