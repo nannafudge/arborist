@@ -2,6 +2,9 @@ mod length;
 mod collection;
 mod interpolate;
 
+#[cfg(feature = "test_utils")]
+mod testsuite;
+
 use collection::ImplInsertable;
 use interpolate::Interpolate;
 use length::{
@@ -85,6 +88,13 @@ pub fn derive_insertable_collection(input: proc_macro::TokenStream) -> proc_macr
             name: parsed.ident
         }
     )
+}
+
+#[cfg(feature = "test_utils")]
+#[proc_macro]
+pub fn impl_test(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: testsuite::ImplTest = parse_macro_input!(input as testsuite::ImplTest);
+    testsuite::render_impl(parsed)
 }
 
 #[proc_macro]

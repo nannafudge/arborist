@@ -31,6 +31,7 @@ impl Parse for ImplInsertable {
     }
 }
 
+
 pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> proc_macro::TokenStream {
     let impl_generics = parsed.impl_generics;
     let ty_generics = parsed.ty_generics;
@@ -39,12 +40,27 @@ pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> proc_macro::Toke
 
     let expanded: proc_macro2::TokenStream = quote! {
         impl #impl_generics InsertableCollection for #name #ty_generics #where_clause {
+            fn new() -> Self {
+                let out = #name::new();
+                assert!(out.capacity() > 1, "Attempted to create collection with 0 capacity");
+
+                out
+            }
+
             fn insert(&mut self, index: usize, item: Self::Output) {
                 #name::insert(self, index, item);
             }
         
             fn remove(&mut self, index: usize) -> Self::Output {
                 #name::remove(self, index)
+            }
+
+            fn set_length(&mut self, length: usize) {
+                unsafe { #name::set_len(self, length) }
+            }
+
+            fn has_capacity(&self) -> bool {
+                #name::capacity(self) >= self.length()
             }
         }
     };

@@ -3,7 +3,8 @@ use quote::{
     ToTokens, quote
 };
 use syn::{
-    Result, Generics, Ident,
+    Ident, Expr,
+    Result, Generics,
     parse::{ParseStream, Parse},
 };
 use super::{
@@ -40,35 +41,34 @@ impl Parse for ImplLength {
 #[derive(Default)]
 pub(crate) enum LengthOverride {
     #[default] None,
-    Some(String)
+    Some(Expr)
 }
 
 impl Parse for LengthOverride {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(LengthOverride::from(
-            input.parse::<syn::LitStr>()?.value()
+            input.parse::<Expr>()
         ))
     }
 }
 
 impl ToTokens for LengthOverride {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let method: &str = match self {
-            LengthOverride::Some(custom) => custom,
-            LengthOverride::None => "self.len()"
-        };
-
-        syn::parse_str::<syn::Expr>(method)
-            .expect("Error creating len method invocation")
-            .to_tokens(tokens)
+        match self {
+            LengthOverride::Some(custom) => custom.to_tokens(tokens),
+            LengthOverride::None => {
+                let ret = syn::parse_str::<Expr>("self.len()").expect("Invariant in LengthOverride ToTokens");
+                ret.to_tokens(tokens);
+            }
+        }
     }
 }
 
-impl From<String> for LengthOverride {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "" => LengthOverride::None,
-            _ => LengthOverride::Some(value)
+impl From<Result<Expr>> for LengthOverride {
+    fn from(value: Result<Expr>) -> Self {
+        match value {
+            Ok(expr) => LengthOverride::Some(expr),
+            Err(_) => LengthOverride::None,
         }
     }
 }
