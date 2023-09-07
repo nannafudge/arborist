@@ -15,8 +15,7 @@ use core::ops::{
     Add, Sub
 };
 use crate::{
-    Height,  Direction,
-    NodeSide, NodeType,
+    NodeSide, NodeType, Direction,
     TreeWalker, TreeWalkerMut,
     require
 };
@@ -55,26 +54,6 @@ pub(crate) mod compat {
 pub fn lsb(i: usize) -> usize {
     let _i: isize = i as isize;
     (_i & -_i) as usize
-}
-
-#[cfg(not(feature = "no_float"))]
-impl<C> Height for C where C: Length + ?Sized {
-    #[cfg(not(target_pointer_width = "64"))]
-    fn height(&self) -> usize {
-        (self.length() as f32).log2().ceil() as usize
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    fn height(&self) -> usize {
-        (self.length() as f64).log2().ceil() as usize
-    }
-}
-
-#[cfg(feature = "no_float")]
-impl<C> Height for C where C: Length + ?Sized {
-    fn height(&self) -> usize {
-        log2_bin(self.length())
-    }
 }
 
 /*################################

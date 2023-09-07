@@ -1,15 +1,10 @@
-
 use quote::{quote, format_ident, ToTokens};
 use proc_macro2::{TokenStream, Delimiter};
 
 use syn::{
-    Generics, Result, Token,
+    Result, Token,
     Type, Ident, Expr,
     parse::{ParseStream, Parse}
-};
-use super::{
-    extract_impl_generics,
-    extract_ty_and_where_generics
 };
 
 #[derive(Clone)]
@@ -44,7 +39,7 @@ pub(crate) struct ImplTest {
     pub function: Ident,
     pub test_body: Ident,
     pub test_args: Option<TokenStream>,
-    pub test_setup: Option<Expr>,
+    pub test_setup: Option<TokenStream>,
 }
 
 impl Parse for ImplTest {
@@ -71,7 +66,14 @@ impl Parse for ImplTest {
         // Additional (optional) test setup boilerplate config
         let _ = input.parse::<Ident>();
         let _ = input.parse::<Token![=]>();
-        let test_setup: Option<Expr> = input.parse().ok();
+
+        let test_setup: Option<TokenStream> = input.step(| cursor | {
+            if let Some((content, _, next)) = cursor.group(Delimiter::Brace) {
+                return Ok((content.token_stream(), next));
+            }
+
+            Err(cursor.error("Expected braces - {}"))
+        }).ok();
 
         Ok(Self {
             test_ident,
@@ -99,7 +101,7 @@ pub(crate) fn render_impl(parsed: ImplTest) -> proc_macro::TokenStream {
         fn #test_ident() {
             #test_setup
 
-            #test_body!(#subtest(#target, #function #test_args));
+            #test_body!(#subtest(#target, #function args = #test_args));
         }
     };
 

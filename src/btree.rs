@@ -17,7 +17,6 @@ use crate::bst::{BST, BSTWalker, BSTError};
 use core::ops::{
     Deref, DerefMut
 };
-use std::process::Output;
 
 const DEFAULT_BALANCE_FACTOR: u8 = 8;
 

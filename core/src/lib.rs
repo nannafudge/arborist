@@ -7,11 +7,11 @@ pub use tree::*;
               Tree
 ################################*/
 
-pub trait Height {
-    fn height(&self) -> usize;
-}
-
 pub mod tree {
+    pub trait Height {
+        fn height(&self) -> usize;
+    }
+
     pub trait TreeRead<T, E> {
         fn get(&self, node: &T) -> Result<&T, E>;
         fn contains(&self, node: &T) -> Result<bool, E>;
@@ -22,18 +22,10 @@ pub mod tree {
     }
 
     pub trait TreeWrite<T, E>: TreeReadMut<T, E> {
-        fn insert(&mut self, node: T) -> Result<&T, E>;
-        fn update(&mut self, node: T) -> Result<&T, E>;
+        fn insert(&mut self, node: T) -> Result<Option<T>, E>;
         fn delete(&mut self, node: &T) -> Result<T, E>;
 
-        fn push(&mut self, node: T) -> Result<&T, E>;
         fn pop(&mut self) -> Result<T, E>;
-    }
-
-    pub trait TreeWriteMut<T, E>: TreeWrite<T, E> {
-        fn insert_mut(&mut self, node: T) -> Result<&mut T, E>;
-        fn update_mut(&mut self, node: T) -> Result<&mut T, E>;
-        fn push_mut(&mut self, node: T) -> Result<&mut T, E>;
     }
 }
 
@@ -44,10 +36,10 @@ pub mod tree {
 pub mod tree_kv {
     use super::tree::{
         TreeRead, TreeReadMut,
-        TreeWrite, TreeWriteMut
+        TreeWrite
     };
 
-    use core::convert::Into;
+    pub use core::convert::Into;
     use core::cmp::Ordering;
 
     #[derive(Debug)]
@@ -55,6 +47,35 @@ pub mod tree_kv {
         Occupied(K, V),
         Search(&'a K),
         None
+    }
+
+    impl<'a, K: PartialEq, V> Default for NodeKV<'a, K, V> {
+        fn default() -> Self {
+            NodeKV::None
+        }
+    }
+
+    impl<'a, K: PartialEq, V> NodeKV<'a, K, V> {
+        pub fn unwrap(self: Self) -> V {
+            match self {
+                NodeKV::Occupied(_, v) => v,
+                _ => panic!("Invalid tree NodeKV returned from search")
+            }
+        }
+
+        pub fn inner(self: &Self) -> &V {
+            match self {
+                NodeKV::Occupied(_, v) => v,
+                _ => panic!("Invalid tree NodeKV returned from search")
+            }
+        }
+
+        pub fn inner_mut(self: &mut Self) -> &mut V {
+            match self {
+                NodeKV::Occupied(_, v) => v,
+                _ => panic!("Invalid tree NodeKV returned from search")
+            }
+        }
     }
 
     impl<'a, K, V> PartialEq<K> for NodeKV<'a, K, V> where
@@ -105,55 +126,40 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeReadKV<'a, K, V, E>: TreeRead<NodeKV<'a, K, V>, E> where
-        &'a NodeKV<'a, K, V>: Into<&'a V>,
-        K: PartialEq + 'a,
-        V: 'a
+    pub trait TreeReadKV<'a, 'b, K, V, E>: TreeRead<NodeKV<'b, K, V>, E> where
+        K: PartialEq + 'b,
+        'b: 'a
     {
-        fn get(&'a self, key: &'a K) -> Result<&V, E> {
-            Ok(TreeRead::get(self, &NodeKV::Search(key))?.into())
+        fn get(&'a self, key: &'b K) -> Result<&'a V, E> {
+            Ok(TreeRead::get(self, &NodeKV::<'b, K, V>::Search(key))?.inner())
         }
-        fn contains(&'a self, key: &'a K) -> Result<bool, E> {
+
+        fn contains(&self, key: &'b K) -> Result<bool, E> {
             TreeRead::contains(self, &NodeKV::Search(key))
         }
     }
 
-    pub trait TreeReadKVMut<'a, K, V, E>: TreeReadMut<NodeKV<'a, K, V>, E> where
-        &'a mut NodeKV<'a, K, V>: Into<&'a mut V>,
-        K: PartialEq + 'a,
-        V: 'a
+    pub trait TreeReadKVMut<'a, 'b, K, V, E>: TreeReadMut<NodeKV<'b, K, V>, E> where
+        K: PartialEq + 'b,
+        'b: 'a
     {
-        fn get_mut(&'a mut self, key: &'a K) -> Result<&mut V, E> {
-            Ok(TreeReadMut::get_mut(self, &NodeKV::Search(key))?.into())
+        fn get_mut(&'a mut self, key: &'b K) -> Result<&'a mut V, E>  {
+            Ok(TreeReadMut::get_mut(self, &NodeKV::<'b, K, V>::Search(key))?.inner_mut())
         }
     }
 
     pub trait TreeWriteKV<'a, K, V, E>: TreeWrite<NodeKV<'a, K, V>, E> where
-        &'a NodeKV<'a, K, V>: Into<&'a V>,
-        NodeKV<'a, K, V>: Into<V>,
-        K: PartialEq + 'a,
-        V: 'a,
+        K: PartialEq + 'a
     {
-        fn insert(&'a mut self, key: K, value: V) -> Result<&V, E> {
-            Ok(TreeWrite::insert(self, NodeKV::Occupied(key, value))?.into())
+        fn insert(&mut self, key: K, value: V) -> Result<Option<V>, E> {
+            Ok(
+                TreeWrite::insert(self, NodeKV::Occupied(key, value))?
+                    .map(| kv  | kv.unwrap())
+            )
         }
 
-        fn update(&'a mut self, key: &'a K, value: V) -> Result<&V, E> {
-            match TreeReadMut::get_mut(self, &NodeKV::Search(key))? {
-                NodeKV::Occupied(_, v) => {
-                    *v = value;
-                    Ok(v)
-                },
-                _ => panic!("Unexpected result in update: get() should not return unoccupied nodes")
-            }
-        }
-
-        fn delete(&'a mut self, key: &'a K) -> Result<V, E> {
-            Ok(TreeWrite::delete(self, &NodeKV::Search(key))?.into())
-        }
-
-        fn push(&'a mut self, key: K, value: V) -> Result<&V, E> {
-            Ok(TreeWrite::push(self, NodeKV::Occupied(key, value))?.into())
+        fn delete(&mut self, key: &'a K) -> Result<V, E> {
+            Ok(TreeWrite::delete(self, &NodeKV::Search(key))?.unwrap())
         }
 
         fn pop(&'a mut self) -> Result<NodeKV<K, V>, E> {
@@ -161,30 +167,9 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeWriteMutKV<'a, K, V, E>: TreeWriteMut<NodeKV<'a, K, V>, E> where
-        &'a mut NodeKV<'a, K, V>: Into<&'a mut V>,
-        NodeKV<'a, K, V>: Into<V>,
-        K: PartialEq + 'a,
-        V: 'a,
-    {
-        fn insert_mut(&'a mut self, key: K, value: V) -> Result<&mut V, E> {
-            Ok(TreeWriteMut::insert_mut(self, NodeKV::Occupied(key, value))?.into())
-        }
-
-        fn update_mut(&'a mut self, key: &'a K, value: V) -> Result<&mut V, E> {
-            match TreeReadMut::get_mut(self, &NodeKV::Search(key))? {
-                NodeKV::Occupied(_, v) => {
-                    *v = value;
-                    Ok(v)
-                },
-                _ => panic!("Unexpected result in update: get() should not return unoccupied nodes")
-            }
-        }
-
-        fn push_mut(&'a mut self, key: K, value: V) -> Result<&mut V, E> {
-            Ok(TreeWriteMut::push_mut(self, NodeKV::Occupied(key, value))?.into())
-        }
-    }
+    impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKV<'a, 'b, K, V, E> for T where T: TreeRead<NodeKV<'b, K, V>, E> {}
+    impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKVMut<'a, 'b, K, V, E> for T where T: TreeReadMut<NodeKV<'b, K, V>, E> {}
+    impl<'a, K: PartialEq + 'a, V, E, T> TreeWriteKV<'a, K, V, E> for T where T: TreeWrite<NodeKV<'a, K, V>, E> + 'a {}
 }
 
 /*################################
@@ -243,9 +228,3 @@ pub enum NodeType {
     Node,
     Leaf
 }
-
-/*################################
-              Errors
-################################*/
-
-pub struct TreeError<T>(T);

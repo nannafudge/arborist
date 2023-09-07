@@ -7,9 +7,10 @@ use crate::{
     TreeWalker, TreeWalkerMut
 };
 use crate::fenwick::{
-    errors::FenwickTreeError, lsb,
-    Direction, Height, Length, IndexView,
-    VirtualTreeView, StatefulTreeView, StatefulTreeViewMut
+    errors::FenwickTreeError, traits::*,
+    VirtualTreeView, StatefulTreeView, StatefulTreeViewMut,
+    IndexView, Direction, Length,
+    lsb
 };
 
 use core::cell::RefCell;
@@ -391,7 +392,7 @@ impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut retu
 #[cfg(feature = "proptest")]
 mod proptest {
     use proptest::prelude::*;
-    use crate::fenwick::{compat::log2_bin, Height};
+    use crate::fenwick::{compat::log2_bin, traits::*};
 
     proptest! {
         #[test]

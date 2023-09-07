@@ -60,7 +60,7 @@ pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> proc_macro::Toke
             }
 
             fn has_capacity(&self) -> bool {
-                #name::capacity(self) >= self.length()
+                #name::capacity(self) > self.length()
             }
         }
     };

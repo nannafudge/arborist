@@ -4,6 +4,8 @@ use arborist_proc::{
     impl_length
 };
 
+pub use crate::tree::Height;
+
 pub trait IndexedCollection: Index<usize> + Length {}
 pub trait IndexedCollectionMut: IndexMut<usize> + IndexedCollection {}
 
@@ -106,6 +108,26 @@ mod std_vec {
         fn has_capacity(&self) -> bool {
             true
         }
+    }
+}
+
+#[cfg(not(feature = "no_float"))]
+impl<C> Height for C where C: Length + ?Sized {
+    #[cfg(not(target_pointer_width = "64"))]
+    fn height(&self) -> usize {
+        (self.length() as f32).log2().ceil() as usize
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    fn height(&self) -> usize {
+        (self.length() as f64).log2().ceil() as usize
+    }
+}
+
+#[cfg(feature = "no_float")]
+impl<C> Height for C where C: Length + ?Sized {
+    fn height(&self) -> usize {
+        log2_bin(self.length())
     }
 }
 

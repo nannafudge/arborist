@@ -1,56 +1,83 @@
-use arborist_proc::{impl_test, interpolate};
+
+use arborist_proc::impl_test;
 
 use arborist::bst::BSTError;
-use arborist::bst::bstmap::*;
-use arborist::bst::bstset::*;
-
 use arborist_core::fenwick::FenwickTreeError;
 
-static mut ARG_GEN: usize = 0;
+struct ArgGen {
+    arg: usize
+}
 
-/*macro_rules! construct_bst_args {
-    ($ty:ty) => {
-        interpolate!{
-            a => {
-                format("#[a]" a => {$ty})
-            },
-            construct_bst_args!{where #[a]}
+impl ArgGen {
+    fn new() -> Self {
+        Self {
+            arg: 0
         }
-    };
-    (where BSTSet<usize>) => {
-        unsafe { ARG_GEN }
-    };
-    (where BSTSetConst<usize; 32>) => {
-        unsafe { ARG_GEN }
-    };
-    (where BSTMap<usize, usize>) => {
-        unsafe { ARG_GEN }, unsafe  { ARG_GEN }
-    };
-    (where BSTMapConst<usize, usize; 32>) => {
-        unsafe { ARG_GEN }, unsafe { ARG_GEN }
-    };
+    }
+
+    fn gen(&mut self) -> usize {
+        self.arg += 1;
+        self.arg
+    }
 }
 
 macro_rules! impl_bst_test {
-    (insert($bst:ty, $fn:ident)) => {
+    (insert($bst:ty, $fn:ident args = $($args:tt)+)) => {
         let mut bst: $bst = <$bst>::new();
 
-        for i in 1..bst.length() - 1 {
-            assert_eq!(bst.insert(construct_bst_args!{$bst}), Ok(&i));
+        for _ in 1..16 {
+            assert_eq!(bst.insert($($args)+), Ok(None));
         }
 
-        assert_eq!(bst.insert(construct_bst_args!{$bst}), Err(BSTError::Inner(FenwickTreeError::Full)));
+        assert_eq!(bst.height(), 4);
+    };
+    (insert_const($bst:ty, $fn:ident args = $($args:tt)+)) => {
+        let mut bst: $bst = <$bst>::new();
+
+        for _ in 1..16 {
+            assert_eq!(bst.insert($($args)+), Ok(None));
+        }
+
+        assert_eq!(bst.insert($($args)+), Err(BSTError::Inner(FenwickTreeError::Full)));
     };
 }
 
 impl_test!{
     bstset.insert for BSTSet<usize>.insert;
-    use impl_bst_test;
-    setup = unsafe { ARG_GEN = 0; }
+    use impl_bst_test(args.gen());
+    setup = {
+        use arborist::bst::bstset::*;
+
+        let mut args: ArgGen = ArgGen::new();
+    }
 }
 
 impl_test!{
     bstmap.insert for BSTMap<usize, usize>.insert;
-    use impl_bst_test;
-    setup = unsafe { ARG_GEN = 0; }
-}*/
+    use impl_bst_test(args.gen(), args.arg);
+    setup = {
+        use arborist::bst::bstmap::*;
+
+        let mut args: ArgGen = ArgGen::new();
+    }
+}
+
+impl_test!{
+    bstset.insert_const for BSTSetConst<usize, 16>.insert;
+    use impl_bst_test(args.gen());
+    setup = {
+        use arborist::bst::bstset::*;
+
+        let mut args: ArgGen = ArgGen::new();
+    }
+}
+
+impl_test!{
+    bstmap.insert_const for BSTMapConst<usize, usize, 16>.insert;
+    use impl_bst_test(args.gen(), args.arg);
+    setup = {
+        use arborist::bst::bstmap::*;
+
+        let mut args: ArgGen = ArgGen::new();
+    }
+}
