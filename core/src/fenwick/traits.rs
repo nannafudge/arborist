@@ -115,12 +115,12 @@ mod std_vec {
 impl<C> Height for C where C: Length + ?Sized {
     #[cfg(not(target_pointer_width = "64"))]
     fn height(&self) -> usize {
-        (self.length() as f32).log2().ceil() as usize
+        (self.length() as f32).log2().floor() as usize
     }
 
     #[cfg(target_pointer_width = "64")]
     fn height(&self) -> usize {
-        (self.length() as f64).log2().ceil() as usize
+        (self.length() as f64).log2().floor() as usize
     }
 }
 
