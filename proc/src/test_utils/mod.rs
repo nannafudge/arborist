@@ -2,10 +2,13 @@ use quote::{quote, format_ident, ToTokens};
 use proc_macro2::{TokenStream, Delimiter};
 
 use syn::{
+    Type, Ident,
     Result, Token,
-    Type, Ident, Expr,
     parse::{ParseStream, Parse}
 };
+
+mod mocks;
+pub use mocks::*;
 
 #[derive(Clone)]
 pub(crate) struct TestIdent {
@@ -86,7 +89,7 @@ impl Parse for ImplTest {
     }
 }
 
-pub(crate) fn render_impl(parsed: ImplTest) -> proc_macro::TokenStream {
+pub(crate) fn render_impl_test(parsed: ImplTest) -> proc_macro::TokenStream {
     let test_ident: TokenStream = parsed.test_ident.to_token_stream();
     let subtest = parsed.test_ident.subtest;
 
@@ -106,4 +109,8 @@ pub(crate) fn render_impl(parsed: ImplTest) -> proc_macro::TokenStream {
     };
 
     proc_macro::TokenStream::from(expanded)
+}
+
+pub(crate) fn render_impl_mock(name: Ident) -> proc_macro::TokenStream {
+    get_mock(name).into()
 }

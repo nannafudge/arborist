@@ -3,7 +3,7 @@ mod collection;
 mod interpolate;
 
 #[cfg(feature = "test_utils")]
-mod testsuite;
+mod test_utils;
 
 use collection::ImplInsertable;
 use interpolate::Interpolate;
@@ -93,8 +93,15 @@ pub fn derive_insertable_collection(input: proc_macro::TokenStream) -> proc_macr
 #[cfg(feature = "test_utils")]
 #[proc_macro]
 pub fn impl_test(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parsed: testsuite::ImplTest = parse_macro_input!(input as testsuite::ImplTest);
-    testsuite::render_impl(parsed)
+    let parsed: test_utils::ImplTest = parse_macro_input!(input as test_utils::ImplTest);
+    test_utils::render_impl_test(parsed)
+}
+
+#[cfg(feature = "test_utils")]
+#[proc_macro]
+pub fn impl_mock(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: syn::Ident = parse_macro_input!(input as syn::Ident);
+    test_utils::render_impl_mock(parsed)
 }
 
 #[proc_macro]
