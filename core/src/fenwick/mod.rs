@@ -113,7 +113,7 @@ impl From<usize> for NodeSide {
         match index >> index_lsb & 1 {
             0 => NodeSide::Left,
             1 => NodeSide::Right,
-            _ => unreachable!()
+            _ => unreachable!("Invariant")
         }
     }
 }
@@ -123,7 +123,7 @@ impl From<&IndexView> for NodeSide {
         match view.index >> view.lsb & 1 {
             0 => NodeSide::Left,
             1 => NodeSide::Right,
-            _ => unreachable!()
+            _ => unreachable!("Invariant")
         }
     }
 }
@@ -133,7 +133,7 @@ impl From<usize> for NodeType {
         match index & 1 {
             0 => NodeType::Node,
             1 => NodeType::Leaf,
-            _ => unreachable!()
+            _ => unreachable!("Invariant")
         }
     }
 }
@@ -143,7 +143,7 @@ impl From<&IndexView> for NodeType {
         match view.index & 1 {
             0 => NodeType::Node,
             1 => NodeType::Leaf,
-            _ => panic!("Invariant")
+            _ => unreachable!("Invariant")
         }
     }
 }
