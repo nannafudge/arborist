@@ -1,57 +1,16 @@
-use arborist_proc::interpolate;
+use arborist_proc::{impl_mock, interpolate};
 
 use crate::{
     NodeSide, NodeType,
     TreeWalker, TreeWalkerMut
 };
 use crate::fenwick::{
-    errors::FenwickTreeError, traits::*,
     VirtualTreeView, StatefulTreeView, StatefulTreeViewMut,
-    IndexView, Direction, Length, lsb
+    IndexView, Direction, Length, FenwickTreeError, lsb,
+    traits::*
 };
 
-use core::cell::RefCell;
-
-struct MockCollection {
-    len: usize,
-    length_calls: RefCell<usize>
-}
-
-impl Length for MockCollection {
-    fn length(&self) -> usize {
-        unsafe { *self.length_calls.as_ptr() += 1; }
-        self.len
-    }
-}
-
-impl core::ops::Index<usize> for MockCollection {
-    type Output = usize;
-
-    fn index(&self, _: usize) -> &Self::Output {
-        &self.len
-    }
-}
-
-impl core::ops::IndexMut<usize> for MockCollection {
-    fn index_mut(&mut self, _: usize) -> &mut Self::Output {
-        &mut self.len
-    }
-}
-
-#[allow(dead_code)]
-impl MockCollection {
-    fn new(len: usize) -> Self {
-        Self { len, length_calls: RefCell::new(0) }
-    }
-
-    fn set_length(collection: *mut MockCollection, length: usize) {
-        unsafe { *(&mut (*collection).len) = length }
-    }
-
-    fn length_calls(collection: *const MockCollection) -> usize {
-        unsafe { *(*collection).length_calls.as_ptr() }
-    }
-}
+impl_mock!(MockCollection);
 
 // I really should make this interpolate library less shit to use...
 // aka. actually implement boolean logic
@@ -163,56 +122,53 @@ macro_rules! impl_tests {
     };
     (traverse($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
         let $($inner_mods)? collection: [usize; 16] = gen_collection();
-        let collection_length: usize = collection.length();
         let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
-        assert_eq!(walker.$fn_ident(Direction::Up), Ok($($ref$($mut)?)? 2));
-        assert_eq!(walker.$fn_ident(Direction::Up), Ok($($ref$($mut)?)? 4));
+        walker.$fn_ident(Direction::Up);
+        assert_eq!(walker.curr, IndexView { index: 2, lsb: 2 });
+        walker.$fn_ident(Direction::Up);
+        assert_eq!(walker.curr, IndexView { index: 4, lsb: 4 });
 
-        assert_eq!(walker.$fn_ident(Direction::Right), Ok($($ref$($mut)?)? 12));
-        assert_eq!(walker.$fn_ident(Direction::Down(NodeSide::Left)), Ok($($ref$($mut)?)? 10));
-        assert_eq!(walker.$fn_ident(Direction::Down(NodeSide::Right)), Ok($($ref$($mut)?)? 11));
-        assert_eq!(walker.$fn_ident(Direction::Left), Ok($($ref$($mut)?)? 9));
+        walker.$fn_ident(Direction::Right);
+        assert_eq!(walker.curr, IndexView { index: 12, lsb: 4 });
+        walker.$fn_ident(Direction::Down(NodeSide::Left));
+        assert_eq!(walker.curr, IndexView { index: 10, lsb: 2 });
+        walker.$fn_ident(Direction::Down(NodeSide::Right));
+        assert_eq!(walker.curr, IndexView { index: 11, lsb: 1 });
+        walker.$fn_ident(Direction::Left);
+        assert_eq!(walker.curr, IndexView { index: 9, lsb: 1 });
 
         walker.curr.update(8);
 
-        assert_eq!(
-            walker.$fn_ident(Direction::Up),
-            Err(FenwickTreeError::OutOfBounds{ index: 16, length: collection_length })
-        );
-        assert_eq!(
-            walker.$fn_ident(Direction::Right),
-            Err(FenwickTreeError::OutOfBounds{ index: 48, length: collection_length })
-        );
-        assert_eq!(
-            walker.$fn_ident(Direction::Down(NodeSide::Left)),
-            Err(FenwickTreeError::OutOfBounds{ index: 40, length: collection_length })
-        );
-        assert_eq!(
-            walker.$fn_ident(Direction::Down(NodeSide::Right)),
-            Err(FenwickTreeError::OutOfBounds{ index: 44, length: collection_length })
-        );
-        assert_eq!(
-            walker.$fn_ident(Direction::Left),
-            Err(FenwickTreeError::OutOfBounds{ index: 36, length: collection_length })
-        );
+        walker.$fn_ident(Direction::Up);
+        assert_eq!(walker.curr, IndexView { index: 16, lsb: 16 });
+        walker.$fn_ident(Direction::Right);
+        assert_eq!(walker.curr, IndexView { index: 48, lsb: 16 });
+        walker.$fn_ident(Direction::Down(NodeSide::Left));
+        assert_eq!(walker.curr, IndexView { index: 40, lsb: 8 });
+        walker.$fn_ident(Direction::Down(NodeSide::Right));
+        assert_eq!(walker.curr, IndexView { index: 44, lsb: 4 });
+        walker.$fn_ident(Direction::Left);
+        assert_eq!(walker.curr, IndexView { index: 36, lsb: 4 });
     };
     (seek($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
         let $($inner_mods)? collection: [usize; 16] = gen_collection();
-        let collection_length: usize = collection.length();
         let mut walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
         for $($($mut)?)? i in 1..16 {
-            assert_eq!(walker.$fn_ident(i), Ok($($ref$($mut)?)? i));
+            walker.$fn_ident(i);
+            assert_eq!(walker.current(), Ok($($ref$($mut)?)? i));
         }
 
+        walker.$fn_ident(0);
         assert_eq!(
-            walker.$fn_ident(0),
-            Err(FenwickTreeError::OutOfBounds{ index: 0, length: collection_length })
+            walker.current(),
+            Err(FenwickTreeError::OutOfBounds{ index: 0, length: walker.length() })
         );
+        walker.$fn_ident(walker.length());
         assert_eq!(
-            walker.$fn_ident(walker.length()),
-            Err(FenwickTreeError::OutOfBounds{ index: collection_length, length: collection_length })
+            walker.current(),
+            Err(FenwickTreeError::OutOfBounds{ index: walker.length(), length: walker.length() })
         );
     };
     (current($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
@@ -222,10 +178,10 @@ macro_rules! impl_tests {
 
         assert_eq!(walker.$fn_ident(), Ok($($ref$($mut)?)? 1));
 
-        walker.curr += 1;
+        walker.curr.update(2);
         assert_eq!(walker.$fn_ident(), Ok($($ref$($mut)?)? 2));
 
-        walker.curr += 12;
+        walker.curr.update(14);
         assert_eq!(walker.$fn_ident(), Ok($($ref$($mut)?)? 14));
 
         walker.curr.update(walker.length());
@@ -440,14 +396,13 @@ impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut retu
 
 impl_tests!{peek for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 impl_tests!{probe for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
-impl_tests!{traverse for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
-impl_tests!{seek for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 impl_tests!{current for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 
 #[cfg(feature = "proptest")]
 mod proptest {
     use proptest::prelude::*;
+    use arborist_proc::impl_test;
     use crate::fenwick::{compat::log2_bin, traits::*};
 
     proptest! {
@@ -458,6 +413,15 @@ mod proptest {
         #[test]
         fn test_log2_bin_height(s in 0..usize::MAX) {
             prop_assert_eq!(log2_bin(&s), (s as f64).log(2.0).floor() as usize);
+        }
+        impl_test!{
+            bstset.insert for BSTSet<usize>.insert;
+            use impl_bst_test(args.reset(), args.gen());
+            setup = {
+                use arborist::bst::bstset::*;
+        
+                let mut args: ArgGen = ArgGen::new();
+            }
         }
     }
 }

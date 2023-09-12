@@ -24,6 +24,9 @@ proptest = { version = "1.2.0", optional = true }
 criterion = { version = "0.3.6", optional = true }
 rand = { version = "0.8.5", features = ["small_rng"], optional = true }
 
+[dev-dependencies]
+arborist-proc = { version = "0.1.0", features = ["test_utils"], path = "../proc" }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

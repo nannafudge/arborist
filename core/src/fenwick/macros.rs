@@ -89,7 +89,7 @@ macro_rules! impl_walker {
         }
     };
     (@traverse($fn:ident, $output:ty, $($wrap_ret:tt)+)) => {
-        fn $fn(&'w mut self, direction: Direction) -> Result<$output, FenwickTreeError> {
+        fn $fn(&'w mut self, direction: Direction) {
             match direction {
                 Direction::Up => {
                     self.curr.update(impl_walker!{@up(self)});
@@ -104,16 +104,11 @@ macro_rules! impl_walker {
                     impl_walker!(@right(self, +=));
                 }
             };
-
-            interpolate!(ret => {self.curr.index}, $($wrap_ret)+);
         }
     };
     (@seek($fn:ident, $output:ty, $($wrap_ret:tt)+)) => {
-        fn $fn(&'w mut self, path: Self::Path) -> Result<$output, FenwickTreeError> {
-            require!(path > 0, FenwickTreeError::OutOfBounds{ index: 0, length: self.length() });
-
+        fn $fn(&'w mut self, path: Self::Path) {
             self.curr.update(path);
-            interpolate!(ret => {self.curr.index}, $($wrap_ret)+);
         }
     };
     (@current($fn:ident, $($mut:ident,)? $output:ty, $($wrap_ret:tt)+)) => {
@@ -151,7 +146,30 @@ macro_rules! impl_walker {
             NodeSide::from(&self.curr)
         }
     };
-    (new(type = $target_type:ident $(: $mut:tt)?)) => {
+    (@aux_methods_body) => {
+        pub fn index(&self) -> usize {
+            self.curr.index
+        }
+
+        pub fn lsb(&self) -> usize {
+            self.curr.lsb
+        }
+    };
+    (aux_methods(type = VirtualTreeView)) => {
+        impl VirtualTreeView {
+            pub fn new(collection: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
+                require!(index > 0, FenwickTreeError::OutOfBounds { index: 0, length: collection.length() });
+        
+                Ok(Self {
+                    length: collection.length(),
+                    curr: IndexView::new(index)
+                })
+            }
+
+            impl_walker!{@aux_methods_body}
+        }
+    };
+    (aux_methods(type = $target_type:ident $(: $mut:tt)?)) => {
         impl<'a, C> $target_type<'a, C> where
             C: ?Sized + IndexedCollection,
             C::Output: Sized
@@ -164,6 +182,8 @@ macro_rules! impl_walker {
                     curr: IndexView::new(index)
                 })
             }
+
+            impl_walker!{@aux_methods_body}
         }
     };
     (trait(type = VirtualTreeView, output = $output:ty, return_wrapper = $($wrap_ret:tt)+)) => {
@@ -190,8 +210,6 @@ macro_rules! impl_walker {
 
             impl_walker!{@peek(peek_mut, mut, $output, $($wrap_ret)+)}
             impl_walker!{@probe(probe_mut, mut, $output, $($wrap_ret)+)}
-            impl_walker!{@traverse(traverse_mut, $output, $($wrap_ret)+)}
-            impl_walker!{@seek(seek_mut, $output, $($wrap_ret)+)}
             impl_walker!{@current(current_mut, mut, $output, $($wrap_ret)+)}
             impl_walker!{@sibling(sibling_mut, mut, $output, $($wrap_ret)+)}
         }

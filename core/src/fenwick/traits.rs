@@ -6,6 +6,41 @@ use arborist_proc::{
 
 pub use crate::tree::Height;
 
+#[cfg(any(feature = "no_float", feature = "proptest"))]
+pub(crate) mod compat {
+    const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
+
+    pub fn height(length: usize) -> usize {
+        let mut mid: usize = USIZE_MIDPOINT;
+        let mut cur: usize = USIZE_MIDPOINT;
+    
+        while mid > 1 {
+            match length >> cur {
+                1 => break,
+                0 => cur -= { mid >>= 1; mid },
+                _ => cur += { mid >>= 1; mid },
+            }
+        }
+    
+        cur
+    }
+}
+
+#[cfg(feature = "no_float")]
+pub use compat::*;
+
+#[cfg(all(not(feature = "no_float"), not(target_pointer_width = "64")))]
+#[inline(always)]
+pub fn height(length: usize) -> usize {
+    (length as f32).log2().floor() as usize
+}
+
+#[cfg(all(not(feature = "no_float"), target_pointer_width = "64"))]
+#[inline(always)]
+pub fn height(length: usize) -> usize {
+    (length as f64).log2().floor() as usize
+}
+
 pub trait IndexedCollection: Index<usize> + Length {}
 pub trait IndexedCollectionMut: IndexMut<usize> + IndexedCollection {}
 
@@ -111,23 +146,9 @@ mod std_vec {
     }
 }
 
-#[cfg(not(feature = "no_float"))]
-impl<C> Height for C where C: Length + ?Sized {
-    #[cfg(not(target_pointer_width = "64"))]
-    fn height(&self) -> usize {
-        (self.length() as f32).log2().floor() as usize
-    }
-
-    #[cfg(target_pointer_width = "64")]
-    fn height(&self) -> usize {
-        (self.length() as f64).log2().floor() as usize
-    }
-}
-
-#[cfg(feature = "no_float")]
 impl<C> Height for C where C: Length + ?Sized {
     fn height(&self) -> usize {
-        log2_bin(self.length())
+        height(self.length())
     }
 }
 

@@ -1,4 +1,3 @@
-pub mod errors;
 pub mod traits;
 
 #[macro_use]
@@ -23,37 +22,27 @@ use arborist_proc::{
     Length, interpolate, length_method
 };
 
-pub use self::{errors::*, traits::*};
+pub use traits::*;
 
 /*################################
             Functions
 ################################*/
 
-#[cfg(any(feature = "no_float", feature = "proptest"))]
-pub(crate) mod compat {
-    const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
-
-    #[inline(always)]
-    pub(crate) fn log2_bin(length: &usize) -> usize {
-        let mut mid: usize = USIZE_MIDPOINT;
-        let mut cur: usize = USIZE_MIDPOINT;
-    
-        while mid > 1 {
-            match length >> cur {
-                1 => break,
-                0 => cur -= { mid >>= 1; mid },
-                _ => cur += { mid >>= 1; mid },
-            }
-        }
-    
-        cur
-    }
-}
-
 #[inline(always)]
 pub fn lsb(i: usize) -> usize {
     let _i: isize = i as isize;
     (_i & -_i) as usize
+}
+
+/*################################
+              Errors
+################################*/
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum FenwickTreeError {
+    OutOfBounds{index: usize, length: usize},
+    Full,
+    Empty
 }
 
 /*################################
@@ -114,19 +103,8 @@ pub struct StatefulTreeViewMut<'a, C: ?Sized + Length> {
     pub curr: IndexView
 }
 
-impl VirtualTreeView {
-    pub fn new(collection: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
-        require!(index > 0, FenwickTreeError::OutOfBounds { index: 0, length: collection.length() });
-
-        Ok(Self {
-            length: collection.length(),
-            curr: IndexView::new(index)
-        })
-    }
-}
-
 /*################################
-            Node Impl
+            Node Impls
 ################################*/
 
 impl From<usize> for NodeSide {
@@ -171,11 +149,27 @@ impl From<&IndexView> for NodeType {
 }
 
 /*################################
-           Macro Impls
+         IndexView Impls
 ################################*/
 
-impl_walker!{new(type = StatefulTreeView)}
-impl_walker!{new(type = StatefulTreeViewMut: mut)}
+impl_op!{BitOr<usize>, bitor, |, usize}
+impl_op!{BitXor<usize>, bitxor, ^, usize}
+impl_op!{BitAnd<usize>, bitand, &, usize}
+impl_op!{Add<usize>, add, +, usize}
+impl_op!{Sub<usize>, sub, -, usize}
+impl_op_assign!{BitOrAssign<usize>, bitor_assign, |=, usize}
+impl_op_assign!{BitXorAssign<usize>, bitxor_assign, ^=, usize}
+impl_op_assign!{BitAndAssign<usize>, bitand_assign, &=, usize}
+impl_op_assign!{AddAssign<usize>, add_assign, +=, usize}
+impl_op_assign!{SubAssign<usize>, sub_assign, -=, usize}
+
+/*################################
+           Walker Impls
+################################*/
+
+impl_walker!{aux_methods(type = VirtualTreeView)}
+impl_walker!{aux_methods(type = StatefulTreeView)}
+impl_walker!{aux_methods(type = StatefulTreeViewMut: mut)}
 
 impl_walker!{
     trait(
@@ -208,14 +202,3 @@ impl_walker!{
         return_wrapper = safe_tree_index!(stateful(self, #[ret], mut));
     )
 }
-
-impl_op!{BitOr<usize>, bitor, |, usize}
-impl_op!{BitXor<usize>, bitxor, ^, usize}
-impl_op!{BitAnd<usize>, bitand, &, usize}
-impl_op!{Add<usize>, add, +, usize}
-impl_op!{Sub<usize>, sub, -, usize}
-impl_op_assign!{BitOrAssign<usize>, bitor_assign, |=, usize}
-impl_op_assign!{BitXorAssign<usize>, bitxor_assign, ^=, usize}
-impl_op_assign!{BitAndAssign<usize>, bitand_assign, &=, usize}
-impl_op_assign!{AddAssign<usize>, add_assign, +=, usize}
-impl_op_assign!{SubAssign<usize>, sub_assign, -=, usize}

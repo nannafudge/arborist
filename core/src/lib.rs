@@ -12,20 +12,23 @@ pub mod tree {
         fn height(&self) -> usize;
     }
 
-    pub trait TreeRead<T, E> {
-        fn get(&self, node: &T) -> Result<&T, E>;
-        fn contains(&self, node: &T) -> Result<bool, E>;
+    pub trait TreeRead {
+        type Node;
+        type Error;
+    
+        fn get(&self, node: &Self::Node) -> Result<&Self::Node, Self::Error>;
+        fn contains(&self, node: &Self::Node) -> Result<bool, Self::Error>;
     }
 
-    pub trait TreeReadMut<T, E>: TreeRead<T, E> {
-        fn get_mut(&mut self, node: &T) -> Result<&mut T, E>;
+    pub trait TreeReadMut: TreeRead {
+        fn get_mut(&mut self, node: &Self::Node) -> Result<&mut Self::Node, Self::Error>;
     }
 
-    pub trait TreeWrite<T, E>: TreeReadMut<T, E> {
-        fn insert(&mut self, node: T) -> Result<Option<T>, E>;
-        fn delete(&mut self, node: &T) -> Result<T, E>;
+    pub trait TreeWrite: TreeReadMut {
+        fn insert(&mut self, node: Self::Node) -> Result<Option<Self::Node>, Self::Error>;
+        fn delete(&mut self, node: &Self::Node) -> Result<Self::Node, Self::Error>;
 
-        fn pop(&mut self) -> Result<T, E>;
+        fn pop(&mut self) -> Result<Self::Node, Self::Error>;
     }
 }
 
@@ -126,7 +129,7 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeReadKV<'a, 'b, K, V, E>: TreeRead<NodeKV<'b, K, V>, E> where
+    pub trait TreeReadKV<'a, 'b, K, V, E>: TreeRead<Node = NodeKV<'b, K, V>, Error = E> where
         K: PartialEq + 'b,
         'b: 'a
     {
@@ -139,7 +142,7 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeReadKVMut<'a, 'b, K, V, E>: TreeReadMut<NodeKV<'b, K, V>, E> where
+    pub trait TreeReadKVMut<'a, 'b, K, V, E>: TreeReadMut<Node = NodeKV<'b, K, V>, Error = E> where
         K: PartialEq + 'b,
         'b: 'a
     {
@@ -148,7 +151,7 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeWriteKV<'a, 'b, K, V, E>: TreeWrite<NodeKV<'b, K, V>, E> where
+    pub trait TreeWriteKV<'a, 'b, K, V, E>: TreeWrite<Node = NodeKV<'b, K, V>, Error = E> where
         K: PartialEq + 'b,
         'b: 'a
     {
@@ -169,11 +172,11 @@ pub mod tree_kv {
     }
 
     impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKV<'a, 'b, K, V, E> for T where
-        T: TreeRead<NodeKV<'b, K, V>, E> {}
+        T: TreeRead<Node = NodeKV<'b, K, V>, Error = E> {}
     impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKVMut<'a, 'b, K, V, E> for T where
-        T: TreeReadMut<NodeKV<'b, K, V>, E> {}
+        T: TreeReadMut<Node = NodeKV<'b, K, V>, Error = E> {}
     impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeWriteKV<'a, 'b, K, V, E> for T where
-        T: TreeWrite<NodeKV<'b, K, V>, E> + 'a {}
+        T: TreeWrite<Node = NodeKV<'b, K, V>, Error = E> + 'a {}
 }
 
 /*################################
@@ -187,12 +190,12 @@ pub trait TreeWalker<'w> {
 
     fn peek(&'w self, direction: Direction) -> Result<Self::Output, Self::Error>;
     fn probe(&'w self, path: Self::Path) -> Result<Self::Output, Self::Error>;
-    fn traverse(&'w mut self, direction: Direction) -> Result<Self::Output, Self::Error>;
-    fn seek(&'w mut self, path: Self::Path) -> Result<Self::Output, Self::Error>;
-    fn reset(&'w mut self);
-    
     fn current(&'w self) -> Result<Self::Output, Self::Error>;
     fn sibling(&'w self) -> Result<Self::Output, Self::Error>;
+
+    fn traverse(&'w mut self, direction: Direction);
+    fn seek(&'w mut self, path: Self::Path);
+    fn reset(&'w mut self);
     
     fn type_(&'w self) -> NodeType;
     fn side(&'w self) -> NodeSide;
@@ -203,13 +206,9 @@ pub trait TreeWalkerMut<'w>: TreeWalker<'w> {
 
     fn peek_mut(&'w mut self, direction: Direction) -> Result<Self::OutputMut, Self::Error>;
     fn probe_mut(&'w mut self, path: Self::Path) -> Result<Self::OutputMut, Self::Error>;
-    fn traverse_mut(&'w mut self, direction: Direction) -> Result<Self::OutputMut, Self::Error>;
-    fn seek_mut(&'w mut self, path: Self::Path) -> Result<Self::OutputMut, Self::Error>;
 
     fn current_mut(&'w mut self) -> Result<Self::OutputMut, Self::Error>;
     fn sibling_mut(&'w mut self) -> Result<Self::OutputMut, Self::Error>;
-
-    //fn iter_mut(&'w self, direction: Direction, callback: &'w dyn FnMut(&'w mut Self));
 }
 
 pub enum Direction {
