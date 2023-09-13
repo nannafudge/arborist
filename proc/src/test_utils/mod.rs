@@ -8,7 +8,7 @@ use syn::{
 };
 
 mod mocks;
-pub use mocks::*;
+pub use mocks::get_mock;
 
 #[derive(Clone)]
 pub(crate) struct TestIdent {

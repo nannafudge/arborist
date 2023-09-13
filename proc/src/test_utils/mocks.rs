@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 
 // 10/10 builder pattern
 
-pub(crate) fn get_mock(name: Ident) -> TokenStream {
+pub fn get_mock(name: Ident) -> TokenStream {
     match name.to_string().as_str() {
         "MockCollection" => {
             return mock_collection();
@@ -19,6 +19,7 @@ fn mock_collection() -> TokenStream {
     quote!{
         use core::cell::RefCell;
 
+        #[derive(Debug)]
         pub struct MockCollection {
             len: usize,
             length_calls: RefCell<usize>

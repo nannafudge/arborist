@@ -402,26 +402,16 @@ impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut retu
 #[cfg(feature = "proptest")]
 mod proptest {
     use proptest::prelude::*;
-    use arborist_proc::impl_test;
-    use crate::fenwick::{compat::log2_bin, traits::*};
+    use crate::fenwick::traits::*;
 
     proptest! {
         #[test]
-        fn test_collection_height(s in 0..usize::MAX) {
-            prop_assert_eq!(super::MockCollection::new(s).height(), (s as f64).log(2.0).floor() as usize);
+        fn proptest_default_height_impl(s in 0..usize::MAX) {
+            prop_assert_eq!(height(s), (s as f64).log(2.0).floor() as usize);
         }
         #[test]
-        fn test_log2_bin_height(s in 0..usize::MAX) {
-            prop_assert_eq!(log2_bin(&s), (s as f64).log(2.0).floor() as usize);
-        }
-        impl_test!{
-            bstset.insert for BSTSet<usize>.insert;
-            use impl_bst_test(args.reset(), args.gen());
-            setup = {
-                use arborist::bst::bstset::*;
-        
-                let mut args: ArgGen = ArgGen::new();
-            }
+        fn proptest_dfs_height_impl(s in 0..usize::MAX) {
+            prop_assert_eq!(compat::height(&s), (s as f64).log(2.0).floor() as usize);
         }
     }
 }

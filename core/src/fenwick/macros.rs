@@ -159,7 +159,7 @@ macro_rules! impl_walker {
         impl VirtualTreeView {
             pub fn new(collection: &impl Length, index: usize) -> Result<Self, FenwickTreeError> {
                 require!(index > 0, FenwickTreeError::OutOfBounds { index: 0, length: collection.length() });
-        
+
                 Ok(Self {
                     length: collection.length(),
                     curr: IndexView::new(index)

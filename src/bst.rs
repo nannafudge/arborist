@@ -1,8 +1,7 @@
 use arborist_proc::{Length, length_method};
 use arborist_core::fenwick::{
-    Length,
     InsertableCollection, IndexedCollection, IndexedCollectionMut,
-    VirtualTreeView, FenwickTreeError
+    StatefulTreeView, FenwickTreeError, Length
 };
 use arborist_core::{
     TreeRead, TreeReadMut, TreeWrite,
@@ -70,7 +69,7 @@ pub mod bstset {
     pub use super::const_vec::BSTSetConst;
 }
 
-#[derive(Length)]
+#[derive(Length, Clone, Copy)]
 #[length_method(self.inner.length() - 1)]
 pub struct BST<C: Length>  {
     pub(crate) inner: C
@@ -89,6 +88,14 @@ impl<C> BST<C> where C: InsertableCollection {
             inner: inner
         }
     }
+
+    pub fn inner(&self) -> &C {
+        &self.inner
+    }
+
+    pub fn inner_mut(&mut self) -> &mut C {
+        &mut self.inner
+    }
 }
 
 impl<C> BST<C> where
@@ -97,7 +104,7 @@ impl<C> BST<C> where
 {
     pub(crate) fn allocate(&self, node: &C::Output) -> Result<BSTWalkerResult, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
-        Ok(walker.allocate(node)?)
+        Ok(walker.allocate(node))
     }
 }
 
@@ -109,13 +116,16 @@ impl<C> From<C> for BST<C> where C: Length {
     }
 }
 
-impl<C> TreeRead<C::Output, BSTError> for BST<C> where
+impl<C> TreeRead for BST<C> where
     C: IndexedCollection,
     C::Output: Sized + PartialEq + PartialOrd
 {
+    type Node = C::Output;
+    type Error = BSTError;
+
     fn get(&self, node: &C::Output) -> Result<&C::Output, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
-        let index: usize = walker.find(node).map_err(|_| BSTError::KeyNotFound)?;
+        let index: usize = walker.find(node)?;
         Ok(&self.inner[index])
     }
 
@@ -125,35 +135,29 @@ impl<C> TreeRead<C::Output, BSTError> for BST<C> where
     }
 }
 
-impl<C> TreeReadMut<C::Output, BSTError> for BST<C> where
+impl<C> TreeReadMut for BST<C> where
     C: IndexedCollectionMut,
     C::Output: Sized + PartialEq + PartialOrd
 {
     fn get_mut(&mut self, node: &C::Output) -> Result<&mut C::Output, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
-        let index: usize = walker.find(node).map_err(|_| BSTError::KeyNotFound)?;
+        let index: usize = walker.find(node)?;
         Ok(&mut self.inner[index])
     }
 }
 
-impl<C> TreeWrite<C::Output, BSTError> for BST<C> where
+impl<C> TreeWrite for BST<C> where
     C: InsertableCollection + IndexedCollectionMut,
     C::Output: Sized + PartialEq + PartialOrd
 {
     fn insert(&mut self, node: C::Output) -> Result<Option<C::Output>, BSTError> {
-        require!(self.inner.has_capacity(), BSTError::Inner(FenwickTreeError::Full));
-
-        if self.length() == 0 {
-            self.inner.insert(1, node);
-            // Always no previous node if no elements
-            return Ok(None);
-        }
-
         Ok(match self.allocate(&node)? {
             BSTWalkerResult::Existing(index) => {
                 Some(core::mem::replace(&mut self.inner[index], node))
             },
             BSTWalkerResult::New(index) => {
+                require!(self.inner.has_capacity(), BSTError::Inner(FenwickTreeError::Full));
+
                 self.inner.insert(index, node);
                 None
             }
@@ -161,8 +165,6 @@ impl<C> TreeWrite<C::Output, BSTError> for BST<C> where
     }
 
     fn delete(&mut self, node: &C::Output) -> Result<C::Output, BSTError> {
-        require!(self.inner.length() > 1, BSTError::Inner(FenwickTreeError::Empty));
-
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
         let index: usize = walker.find(&node)?;
 
@@ -176,65 +178,65 @@ impl<C> TreeWrite<C::Output, BSTError> for BST<C> where
     }
 }
 
-pub struct BSTWalker<'w, C: Length> {
-    pub view: VirtualTreeView,
-    inner: &'w C
+#[derive(Debug, Length)]
+#[length_method(self.view.length())]
+pub struct BSTWalker<'w, C: IndexedCollection + ?Sized> {
+    pub view: StatefulTreeView<'w, C>
 }
 
-impl<'w, C> BSTWalker<'w, C> where
-    C: IndexedCollection,
+impl<'a, 'w, C> BSTWalker<'w, C> where
+    C: IndexedCollection+ ?Sized,
     C::Output: Sized + PartialOrd
 {
     pub fn new(inner: &'w C) -> Result<Self, BSTError> {
+        // Start at centermost point of tree
+        let start_index: usize = 1 << inner.height();
+
         Ok(Self {
-            view: VirtualTreeView::new(inner, inner.height())?,
-            inner: inner
+            view: StatefulTreeView::new(inner, start_index)?
         })
     }
 
-    pub fn find(&mut self, key: &C::Output) -> Result<usize, BSTError> {
-        let mut node: usize = self.view.current()?;
-        loop {
-            match &self.inner[node].partial_cmp(key) {
-                Some(Ordering::Less) => {
-                    node = self.view.traverse(Direction::Down(NodeSide::Left))?;
+    pub fn allocate(&'a mut self, key: &C::Output) -> BSTWalkerResult {
+        while self.view.lsb() > 1 {
+            match self.view.current().partial_cmp(&Ok(key)) {
+                Some(Ordering::Greater) | None => {
+                    self.view.traverse(Direction::Down(NodeSide::Left));
                 },
-                Some(Ordering::Greater) => {
-                    node = self.view.traverse(Direction::Down(NodeSide::Right))?;
+                Some(Ordering::Less) => {
+                    self.view.traverse(Direction::Down(NodeSide::Right));
                 },
                 Some(Ordering::Equal) => {
-                    return Ok(node)
-                },
-                _ => panic!("PartialCmp failed for BST node in get()")
+                    return BSTWalkerResult::Existing(self.view.index());
+                }
+            }
+        }
+
+        match self.view.current().partial_cmp(&Ok(key)) {
+            // key < current_key || !current_key, insert at current
+            Some(Ordering::Greater) | None => {
+                BSTWalkerResult::New(self.view.index())
+            },
+            // key > current_key, insert one ahead
+            Some(Ordering::Less) => {
+                BSTWalkerResult::New(self.view.index() + 1)
+            },
+            // key == current_key, 
+            Some(Ordering::Equal) => {
+                BSTWalkerResult::Existing(self.view.index())
             }
         }
     }
 
-    // Finds the appropriate/corresponding array index for `key`
-    pub fn allocate(&mut self, key: &C::Output) -> Result<BSTWalkerResult, BSTError> {
-        let mut node: usize = self.view.current()?;
-        loop {
-            match &self.inner[node].partial_cmp(key) {
-                Some(Ordering::Less) => {
-                    match self.view.traverse(Direction::Down(NodeSide::Left)) {
-                        Ok(next) => node = next,
-                        _ => break
-                    }
-                },
-                Some(Ordering::Greater) => {
-                    match self.view.traverse(Direction::Down(NodeSide::Left)) {
-                        Ok(next) => node = next,
-                        _ => break
-                    }
-                },
-                Some(Ordering::Equal) => {
-                    return Ok(BSTWalkerResult::Existing(node));
-                },
-                _ => panic!("PartialCmp failed for BST node in get()")
-            }
+    pub fn find(&mut self, key: &C::Output) -> Result<usize, BSTError> {
+        match self.allocate(key) {
+            BSTWalkerResult::Existing(index) => Ok(index),
+            BSTWalkerResult::New(_) => Err(BSTError::KeyNotFound)
         }
+    }
 
-        Ok(BSTWalkerResult::New(node))
+    pub fn reset(&mut self) {
+        self.view.seek(1 << self.view.height())
     }
 }
 

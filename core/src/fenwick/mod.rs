@@ -40,9 +40,9 @@ pub fn lsb(i: usize) -> usize {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum FenwickTreeError {
-    OutOfBounds{index: usize, length: usize},
     Full,
-    Empty
+    Empty,
+    OutOfBounds{index: usize, length: usize}
 }
 
 /*################################
