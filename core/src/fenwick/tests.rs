@@ -399,19 +399,38 @@ impl_tests!{probe for StatefulTreeViewMut<[usize]> where collection = mut return
 impl_tests!{current for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 
-#[cfg(feature = "proptest")]
-mod proptest {
-    use proptest::prelude::*;
+mod height_impls {
     use crate::fenwick::traits::*;
+    use rand::{
+        SeedableRng, RngCore
+    };
+    use rand::rngs::{
+        SmallRng, OsRng
+    };
 
-    proptest! {
-        #[test]
-        fn proptest_default_height_impl(s in 0..usize::MAX) {
-            prop_assert_eq!(height(s), (s as f64).log(2.0).floor() as usize);
+    const ITERATIONS: usize = 128;
+
+    #[test]
+    fn default() {
+        let mut randomness: SmallRng = SmallRng::seed_from_u64(OsRng.next_u64());
+        for i in 0..ITERATIONS {
+            let val: usize = randomness.next_u64() as usize;
+            assert_eq!(
+                height(val), (val as f64).log(2.0).floor() as usize,
+                "Failed at iteration {} with value: {}", i, val
+            );
         }
-        #[test]
-        fn proptest_dfs_height_impl(s in 0..usize::MAX) {
-            prop_assert_eq!(compat::height(&s), (s as f64).log(2.0).floor() as usize);
+    }
+
+    #[test]
+    fn no_float() {
+        let mut randomness: SmallRng = SmallRng::seed_from_u64(OsRng.next_u64());
+        for i in 0..ITERATIONS {
+            let val: usize = randomness.next_u64() as usize;
+            assert_eq!(
+                crate::fenwick::compat::height(val), (val as f64).log(2.0).floor() as usize,
+                "Failed at iteration {} with value: {}", i, val
+            );
         }
     }
 }

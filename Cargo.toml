@@ -7,11 +7,11 @@ edition = "2021"
 
 [features]
 bench = ["arborist-core/bench"]
-
 bumpalo_vec = ["dep:bumpalo", "arborist-core/bumpalo_vec"]
 const_vec = ["dep:tinyvec"]
 no_float = ["arborist-core/no_float"]
 std_vec = ["arborist-core/std_vec"]
+
 default = ["const_vec", "std_vec"]
 
 [dependencies]

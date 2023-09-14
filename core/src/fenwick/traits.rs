@@ -6,7 +6,7 @@ use arborist_proc::{
 
 pub use crate::tree::Height;
 
-#[cfg(any(feature = "no_float", feature = "proptest"))]
+#[cfg(any(feature = "no_float", test))]
 pub(crate) mod compat {
     const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
 
