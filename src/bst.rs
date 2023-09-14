@@ -24,19 +24,41 @@ pub mod bumpalo_vec {
 #[cfg(feature = "std_vec")]
 pub mod std_vec {
     use std::vec::Vec;
+    use arborist_core::fenwick::IndexedCollection;
+
     use super::{BST, NodeKV};
 
     pub type BSTSet<T> = BST<Vec<T>>;
-    pub type BSTMap<'a, K, V> = BST<Vec<NodeKV<'a, K, V>>>;
+    pub type BSTMap<'t, K, V> = BST<Vec<NodeKV<'t, K, V>>>;
+
+    impl<C> From<C> for BST<Vec<C::Output>> where
+        C: IndexedCollection + Into<Vec<C::Output>> + ?Sized,
+        C::Output: Sized
+    {
+        fn from(inner: C) -> Self {
+            Self {
+                inner: inner.into()
+            }
+        }
+    }
 }
 
 #[cfg(feature = "const_vec")]
 pub mod const_vec {
-    use tinyvec::ArrayVec;
-    use super::{BST, NodeKV};
+    use tinyvec::{Array, ArrayVec};
+    use super::{
+        BST, NodeKV,
+        IndexedCollection
+    };
 
     pub type BSTSetConst<T, const N: usize> = BST<ArrayVec<[T; N]>>;
-    pub type BSTMapConst<'a, K, V, const N: usize> = BST<ArrayVec<[NodeKV<'a, K, V>; N]>>;
+    pub type BSTMapConst<'t, K, V, const N: usize> = BST<ArrayVec<[NodeKV<'t, K, V>; N]>>;
+
+    impl<I: Array + IndexedCollection> From<I> for BST<ArrayVec<I>> {
+        fn from(value: I) -> Self {
+            Self { inner: ArrayVec::from(value) }
+        }
+    }
 }
 
 pub mod bstmap {
@@ -51,7 +73,7 @@ pub mod bstmap {
     pub use super::std_vec::BSTMap;
     
     #[cfg(feature = "const_vec")]
-    pub use super::const_vec::BSTMapConst;
+    pub use super::const_vec::*;
 }
 
 pub mod bstset {
@@ -66,12 +88,12 @@ pub mod bstset {
     pub use super::std_vec::BSTSet;
     
     #[cfg(feature = "const_vec")]
-    pub use super::const_vec::BSTSetConst;
+    pub use super::const_vec::*;
 }
 
 #[derive(Length, Clone, Copy)]
 #[length_method(self.inner.length() - 1)]
-pub struct BST<C: Length>  {
+pub struct BST<C: Length> {
     pub(crate) inner: C
 }
 
@@ -105,14 +127,6 @@ impl<C> BST<C> where
     pub(crate) fn allocate(&self, node: &C::Output) -> Result<BSTWalkerResult, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
         Ok(walker.allocate(node))
-    }
-}
-
-impl<C> From<C> for BST<C> where C: Length {
-    fn from(inner: C) -> Self {
-        Self {
-            inner: inner
-        }
     }
 }
 
@@ -184,8 +198,8 @@ pub struct BSTWalker<'w, C: IndexedCollection + ?Sized> {
     pub view: StatefulTreeView<'w, C>
 }
 
-impl<'a, 'w, C> BSTWalker<'w, C> where
-    C: IndexedCollection+ ?Sized,
+impl<'w, C> BSTWalker<'w, C> where
+    C: IndexedCollection + ?Sized,
     C::Output: Sized + PartialOrd
 {
     pub fn new(inner: &'w C) -> Result<Self, BSTError> {
@@ -197,7 +211,7 @@ impl<'a, 'w, C> BSTWalker<'w, C> where
         })
     }
 
-    pub fn allocate(&'a mut self, key: &C::Output) -> BSTWalkerResult {
+    pub fn allocate(&mut self, key: &C::Output) -> BSTWalkerResult {
         while self.view.lsb() > 1 {
             match self.view.current().partial_cmp(&Ok(key)) {
                 Some(Ordering::Greater) | None => {

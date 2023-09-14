@@ -37,16 +37,22 @@ pub mod tree {
 ################################*/
 
 pub mod tree_kv {
+    use core::cmp::Ordering;
     use super::tree::{
         TreeRead, TreeReadMut,
         TreeWrite
     };
 
-    pub use core::convert::Into;
-    use core::cmp::Ordering;
+    fn construct_search<'c, 't, K: 't, V>(key: &'c K) -> NodeKV<'t, K, V> {
+        unsafe {
+            std::mem::transmute::<NodeKV::<'c, K, V>, NodeKV::<'t, K, V>>(
+                NodeKV::<'c, K, V>::Search(key)
+            )
+        }
+    }
 
-    #[derive(Debug)]
-    pub enum NodeKV<'a, K: PartialEq, V> {
+    #[derive(Debug, Clone)]
+    pub enum NodeKV<'a, K, V> {
         Occupied(K, V),
         Search(&'a K),
         None
@@ -129,54 +135,54 @@ pub mod tree_kv {
         }
     }
 
-    pub trait TreeReadKV<'a, 'b, K, V, E>: TreeRead<Node = NodeKV<'b, K, V>, Error = E> where
-        K: PartialEq + 'b,
-        'b: 'a
+    pub trait TreeReadKV<'t, K, V, E> where
+        Self: TreeRead<Node = NodeKV<'t, K, V>, Error = E>,
+        K: PartialEq + 't
     {
-        fn get(&'a self, key: &'b K) -> Result<&'a V, E> {
-            Ok(TreeRead::get(self, &NodeKV::Search(key))?.inner())
+        fn get<'c>(&'c self, key: &'c K) -> Result<&'c V, E> where 't: 'c {
+            Ok(TreeRead::get(self, &construct_search(key))?.inner())
         }
 
-        fn contains(&'a self, key: &'b K) -> Result<bool, E> {
-            TreeRead::contains(self, &NodeKV::Search(key))
-        }
-    }
-
-    pub trait TreeReadKVMut<'a, 'b, K, V, E>: TreeReadMut<Node = NodeKV<'b, K, V>, Error = E> where
-        K: PartialEq + 'b,
-        'b: 'a
-    {
-        fn get_mut(&'a mut self, key: &'b K) -> Result<&'a mut V, E>  {
-            Ok(TreeReadMut::get_mut(self, &NodeKV::Search(key))?.inner_mut())
+        fn contains<'c>(&'t self, key: &'c K) -> Result<bool, E> {
+            TreeRead::contains(self, &construct_search(key))
         }
     }
 
-    pub trait TreeWriteKV<'a, 'b, K, V, E>: TreeWrite<Node = NodeKV<'b, K, V>, Error = E> where
-        K: PartialEq + 'b,
-        'b: 'a
+    pub trait TreeReadKVMut<'t, K, V, E> where
+        Self: TreeReadMut<Node = NodeKV<'t, K, V>>,
+        K: PartialEq + 't
     {
-        fn insert(&'a mut self, key: K, value: V) -> Result<Option<V>, E> {
+        fn get_mut<'c>(&'c mut self, key: &'c K) -> Result<&'c mut V, Self::Error> where 't: 'c {
+            Ok(TreeReadMut::get_mut(self, &construct_search(key))?.inner_mut())
+        }
+    }
+
+    pub trait TreeWriteKV<'t, K, V, E> where
+        Self: TreeWrite<Node = NodeKV<'t, K, V>, Error = E>,
+        K: PartialEq + 't
+    {
+        fn insert(&mut self, key: K, value: V) -> Result<Option<V>, E> {
             Ok(
                 TreeWrite::insert(self, NodeKV::Occupied(key, value))?
                     .map(| kv  | kv.unwrap())
             )
         }
 
-        fn delete(&'a mut self, key: &'b K) -> Result<V, E> {
-            Ok(TreeWrite::delete(self, &NodeKV::Search(key))?.unwrap())
+        fn delete<'c>(&mut self, key: &'c K) -> Result<V, E> {
+            Ok(TreeWrite::delete(self, &construct_search(key))?.unwrap())
         }
 
-        fn pop(&'a mut self) -> Result<NodeKV<K, V>, E> {
+        fn pop<'c>(&'c mut self) -> Result<NodeKV<K, V>, E> where 't: 'c {
             TreeWrite::pop(self)
         }
     }
 
-    impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKV<'a, 'b, K, V, E> for T where
-        T: TreeRead<Node = NodeKV<'b, K, V>, Error = E> {}
-    impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeReadKVMut<'a, 'b, K, V, E> for T where
-        T: TreeReadMut<Node = NodeKV<'b, K, V>, Error = E> {}
-    impl<'a, 'b: 'a, K: PartialEq + 'b, V, E, T> TreeWriteKV<'a, 'b, K, V, E> for T where
-        T: TreeWrite<Node = NodeKV<'b, K, V>, Error = E> + 'a {}
+    impl<'t, K: PartialEq + 't, V, E, T> TreeReadKV<'t, K, V, E> for T where
+        T: TreeRead<Node = NodeKV<'t, K, V>, Error = E> {}
+    impl<'t, K: PartialEq + 't, V, E, T> TreeReadKVMut<'t, K, V, E> for T where
+        T: TreeReadMut<Node = NodeKV<'t, K, V>, Error = E> {}
+    impl<'t, K: PartialEq + 't, V, E, T> TreeWriteKV<'t, K, V, E> for T where
+        T: TreeWrite<Node = NodeKV<'t, K, V>, Error = E> {}
 }
 
 /*################################

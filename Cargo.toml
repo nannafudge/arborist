@@ -7,7 +7,6 @@ edition = "2021"
 
 [features]
 bench = ["arborist-core/bench"]
-proptest = ["dep:proptest", "arborist-core/proptest"]
 
 bumpalo_vec = ["dep:bumpalo", "arborist-core/bumpalo_vec"]
 const_vec = ["dep:tinyvec"]
@@ -20,10 +19,10 @@ arborist-core = { version = "0.1.0", path = "./core" }
 arborist-proc = { version = "0.1.0", path = "./proc" }
 bumpalo = { version = "3.13.0", optional = true }
 tinyvec = { version = "1.6.0", optional = true }
-proptest = { version = "1.2.0", optional = true }
 
 [dev-dependencies]
 arborist-proc = { version = "0.1.0", features = ["test_utils"], path = "./proc" }
+rand = { version = "0.8.5", features = ["small_rng"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
