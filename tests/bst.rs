@@ -1,6 +1,7 @@
 mod common;
 use common::*;
 
+use arborist_proc::interpolate;
 use arborist_core::fenwick::FenwickTreeError;
 use arborist::bst::{
     BSTWalker, BSTWalkerResult,
@@ -8,6 +9,59 @@ use arborist::bst::{
 };
 
 const BST_SIZE: usize = 16;
+
+macro_rules! impl_suite {
+    ($bst:ty $(, $map:tt)?) => {
+        interpolate!{
+            args => {
+                select(
+                    bstmap => {gen.arg(), gen.arg()}
+                    bstset => {gen.arg()}
+                    selector => {$($map)?}
+                )
+            },
+            #[test]
+            fn insert() {
+                for _ in 0..5 {
+                    let mut gen: ArgGen = ArgGen::new();
+                    let mut bst: $bst = <$bst>::new();
+        
+                    impl_tests!{insert(bst, gen, #[args])}
+                }
+            }
+        
+            #[test]
+            fn delete() {
+                let mut gen: ArgGen = ArgGen::new();
+                impl_tests!{delete($bst, gen, #[args])}
+            }
+        
+            #[test]
+            fn get() {
+                let mut gen: ArgGen = ArgGen::new();
+                impl_tests!{get($bst, gen, #[args])}
+            }
+        
+            #[test]
+            fn get_mut() {
+                let mut gen: ArgGen = ArgGen::new();
+                impl_tests!{get_mut($bst, gen, #[args])}
+            }
+        
+            #[test]
+            fn contains() {
+                let mut gen: ArgGen = ArgGen::new();
+                impl_tests!{contains($bst, gen, #[args])}
+            }
+        
+            #[test]
+            fn pop() {
+                let mut gen: ArgGen = ArgGen::new();
+                impl_tests!{pop($bst, gen, #[args])}
+            }
+        }
+    }
+}
 
 macro_rules! impl_tests {
     (@construct($bst:ty, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {
@@ -174,44 +228,8 @@ mod bstset {
     use arborist::bst::bstset::*;
     use super::*;
 
-    #[test]
-    fn insert() {
-        for _ in 0..5 {
-            let mut args: ArgGen = ArgGen::new();
-            let mut bst: BSTSet<usize> = BSTSet::new();
-
-            impl_tests!{insert(bst, args, args.arg())}
-        }
-    }
-
-    #[test]
-    fn delete() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{delete(BSTSet<usize>, args, args.arg())}
-    }
-
-    #[test]
-    fn get() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get(BSTSet<usize>, args, args.arg())}
-    }
-
-    #[test]
-    fn get_mut() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get_mut(BSTSet<usize>, args, args.arg())}
-    }
-
-    #[test]
-    fn contains() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{contains(BSTSet<usize>, args, args.arg())}
-    }
-
-    #[test]
-    fn pop() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{pop(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
+    impl_suite!{
+        BSTSet<usize>
     }
 }
 
@@ -219,44 +237,8 @@ mod bstset_const {
     use arborist::bst::bstset::*;
     use super::*;
 
-    #[test]
-    fn insert() {
-        for _ in 0..5 {
-            let mut args: ArgGen = ArgGen::new();
-            let mut bst: BSTSetConst<usize, BST_SIZE> = BSTSetConst::new();
-
-            impl_tests!{insert_const(bst, args, args.arg())}
-        }
-    }
-
-    #[test]
-    fn delete() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{delete(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
-    }
-
-    #[test]
-    fn get() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
-    }
-
-    #[test]
-    fn get_mut() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get_mut(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
-    }
-
-    #[test]
-    fn contains() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{contains(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
-    }
-
-    #[test]
-    fn pop() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{pop(BSTSetConst<usize, BST_SIZE>, args, args.arg())}
+    impl_suite!{
+        BSTSetConst<usize, BST_SIZE>
     }
 }
 
@@ -264,87 +246,16 @@ mod bstmap {
     use arborist::bst::bstmap::*;
     use super::*;
 
-    #[test]
-    fn insert() {
-        for _ in 0..5 {
-            let mut args: ArgGen = ArgGen::new();
-            let mut bst: BSTMap<usize, usize> = BSTMap::new();
-
-            impl_tests!{insert(bst, args, args.arg(), args.arg() + 1)}
-        }
-    }
-
-    #[test]
-    fn delete() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{delete(BSTMap<usize, usize>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn get() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get(BSTMap<usize, usize>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn get_mut() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get_mut(BSTMap<usize, usize>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn contains() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{contains(BSTMap<usize, usize>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn pop() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{pop(BSTMap<usize, usize>, args, args.arg(), args.arg())}
+    impl_suite!{
+        BSTMap<usize, usize>, map
     }
 }
+
 mod bstmap_const {
     use arborist::bst::bstmap::*;
     use super::*;
 
-    #[test]
-    fn insert() {
-        for _ in 0..5 {
-            let mut args: ArgGen = ArgGen::new();
-            let mut bst: BSTMapConst<usize, usize, BST_SIZE> = BSTMapConst::new();
-
-            impl_tests!{insert_const(bst, args, args.arg(), args.arg() + 1)}
-        }
-    }
-
-    #[test]
-    fn delete() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{delete(BSTMapConst<usize, usize, BST_SIZE>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn get() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get(BSTMapConst<usize, usize, BST_SIZE>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn get_mut() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{get_mut(BSTMapConst<usize, usize, BST_SIZE>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn contains() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{contains(BSTMapConst<usize, usize, BST_SIZE>, args, args.arg(), args.arg())}
-    }
-
-    #[test]
-    fn pop() {
-        let mut args: ArgGen = ArgGen::new();
-        impl_tests!{pop(BSTMapConst<usize, usize, BST_SIZE>, args, args.arg(), args.arg())}
+    impl_suite!{
+        BSTMapConst<usize, usize, BST_SIZE>, map
     }
 }
