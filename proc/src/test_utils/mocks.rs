@@ -48,15 +48,15 @@ fn mock_collection() -> TokenStream {
 
         #[allow(dead_code)]
         impl MockCollection {
-            fn new(len: usize) -> Self {
+            pub fn new(len: usize) -> Self {
                 Self { len, length_calls: RefCell::new(0) }
             }
 
-            fn set_length(collection: *mut MockCollection, length: usize) {
+            pub fn set_length(collection: *mut MockCollection, length: usize) {
                 unsafe { *(&mut (*collection).len) = length }
             }
 
-            fn length_calls(collection: *const MockCollection) -> usize {
+            pub fn length_calls(collection: *const MockCollection) -> usize {
                 unsafe { *(*collection).length_calls.as_ptr() }
             }
         }

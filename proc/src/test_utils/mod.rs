@@ -1,10 +1,12 @@
 use quote::{quote, format_ident, ToTokens};
-use proc_macro2::{TokenStream, Delimiter};
+use proc_macro2::{TokenStream, Delimiter, Literal};
 
 use syn::{
-    Type, Ident,
     Result, Token,
-    parse::{ParseStream, Parse}
+    Ident, LitInt,
+    parse::{
+        ParseStream, Parse
+    }
 };
 
 mod mocks;
@@ -37,74 +39,63 @@ impl Parse for TestIdent {
 
 #[derive(Clone)]
 pub(crate) struct ImplTest {
-    pub test_ident: TestIdent,
-    pub target: Type,
-    pub function: Ident,
-    pub test_body: Ident,
-    pub test_args: Option<TokenStream>,
-    pub test_setup: Option<TokenStream>,
+    pub ident: TestIdent,
+    pub body: TokenStream,
+    pub iterations: LitInt
 }
 
 impl Parse for ImplTest {
     fn parse(input: ParseStream) -> Result<Self> {
-        let test_ident: TestIdent = input.parse()?;
-
-        input.parse::<Token![for]>()?;
-        let target: Type = input.parse()?;
-        input.parse::<Token![.]>()?;
-        let function: Ident = input.parse()?;
+        let ident: TestIdent = input.parse()?;
         input.parse::<Token![;]>()?;
 
-        input.parse::<Token![use]>()?;
-        let test_body: Ident = input.parse()?;
-        let test_args: Option<TokenStream> = input.step(| cursor | {
-            if let Some((content, _, next)) = cursor.group(Delimiter::Parenthesis) {
-                return Ok((content.token_stream(), next));
-            }
-
-            Err(cursor.error("Expected brackets - ()"))
-        }).ok();
-        let _ = input.parse::<Token![;]>();
+        let mut iterations: LitInt = LitInt::from(Literal::usize_unsuffixed(1));
+        let mut body: TokenStream = TokenStream::new();
 
         // Additional (optional) test setup boilerplate config
-        let _ = input.parse::<Ident>();
-        let _ = input.parse::<Token![=]>();
+        while let Ok(test_suite_args) = input.parse::<Ident>() {
+            input.parse::<Token![=]>()?;
+            match test_suite_args.to_string().as_str() {
+                "body" => {
+                    body = input.step(| cursor | {
+                        if let Some((content, _, next)) = cursor.group(Delimiter::Brace) {
+                            return Ok((content.token_stream(), next));
+                        }
 
-        let test_setup: Option<TokenStream> = input.step(| cursor | {
-            if let Some((content, _, next)) = cursor.group(Delimiter::Brace) {
-                return Ok((content.token_stream(), next));
+                        Err(cursor.error("Expected braces - {}"))
+                    })?;
+                },
+                "iterations" => {
+                    iterations = input.parse::<LitInt>()?;
+                },
+                _ => {
+                    input.error("Invalid test suite arg");
+                }
             }
-
-            Err(cursor.error("Expected braces - {}"))
-        }).ok();
+            input.parse::<Token![;]>()?;
+        }
 
         Ok(Self {
-            test_ident,
-            target,
-            function,
-            test_body,
-            test_args,
-            test_setup
+            ident,
+            body,
+            iterations
         })
     }
 }
 
 pub(crate) fn render_impl_test(parsed: ImplTest) -> proc_macro::TokenStream {
-    let test_ident: TokenStream = parsed.test_ident.to_token_stream();
-    let subtest = parsed.test_ident.subtest;
+    let test_ident: TokenStream = parsed.ident.to_token_stream();
 
-    let target = parsed.target;
-    let function = parsed.function;
-    let test_body = parsed.test_body;
-    let test_args = parsed.test_args;
-    let test_setup = parsed.test_setup;
+    // TODO: Move this into ToTokens impl for ImplTest
+    let test_body = parsed.body;
+    let iterations = parsed.iterations;
 
     let expanded: proc_macro2::TokenStream = quote! {
         #[test]
         fn #test_ident() {
-            #test_setup
-
-            #test_body!(#subtest(#target, #function args = #test_args));
+            for _ in 0..#iterations {
+                #test_body
+            }
         }
     };
 
