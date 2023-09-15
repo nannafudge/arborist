@@ -147,8 +147,20 @@ pub mod tree_kv {
         Self: TreeRead<Node = NodeKV<'t, K, V>, Error = E>,
         K: PartialEq + 't
     {
-        fn get<'c>(&'c self, key: &'c K) -> Result<&'c V, E> where 't: 'c {
+        fn get<'c>(&'c self, key: &'c K) -> Result<&V, E> where 't: 'c {
             Ok(TreeRead::get(self, &construct_search(key))?.inner())
+        }
+
+        fn first<'c>(&'c self) -> Result<&V, Self::Error> where 't: 'c {
+            Ok(TreeRead::first(self)?.inner())
+        }
+
+        fn last<'c>(&'c self) -> Result<&V, Self::Error> where 't: 'c {
+            Ok(TreeRead::last(self)?.inner())
+        }
+
+        fn root<'c>(&'c self) -> Result<&V, Self::Error> where 't: 'c {
+            Ok(TreeRead::root(self)?.inner())
         }
 
         fn contains<'c>(&'t self, key: &'c K) -> Result<bool, E> {
@@ -160,8 +172,20 @@ pub mod tree_kv {
         Self: TreeReadMut<Node = NodeKV<'t, K, V>>,
         K: PartialEq + 't
     {
-        fn get_mut<'c>(&'c mut self, key: &'c K) -> Result<&'c mut V, Self::Error> where 't: 'c {
+        fn get_mut<'c>(&'c mut self, key: &'c K) -> Result<&mut V, Self::Error> where 't: 'c {
             Ok(TreeReadMut::get_mut(self, &construct_search(key))?.inner_mut())
+        }
+
+        fn first_mut<'c>(&'c mut self) -> Result<&mut V, Self::Error> where 't: 'c {
+            Ok(TreeReadMut::first_mut(self)?.inner_mut())
+        }
+
+        fn last_mut<'c>(&'c mut self) -> Result<&mut V, Self::Error> where 't: 'c {
+            Ok(TreeReadMut::last_mut(self)?.inner_mut())
+        }
+
+        fn root_mut<'c>(&'c mut self) -> Result<&mut V, Self::Error> where 't: 'c {
+            Ok(TreeReadMut::root_mut(self)?.inner_mut())
         }
     }
 
