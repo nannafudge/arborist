@@ -1,7 +1,7 @@
 use arborist_proc::{Length, length_method};
 use arborist_core::fenwick::{
     InsertableCollection, IndexedCollection, IndexedCollectionMut,
-    StatefulTreeView, FenwickTreeError, Length
+    StatefulTreeView, FenwickTreeError, Length, root
 };
 use arborist_core::{
     TreeRead, TreeReadMut, TreeWrite,
@@ -124,7 +124,7 @@ impl<C> BST<C> where
     C: InsertableCollection,
     C::Output: PartialEq + PartialOrd + Sized
 {
-    pub(crate) fn allocate(&self, node: &C::Output) -> Result<BSTWalkerResult, BSTError> {
+    pub(crate) fn allocate(&self, node: &impl PartialOrd<C::Output>) -> Result<BSTWalkerResult, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
         Ok(walker.allocate(node))
     }
@@ -143,6 +143,24 @@ impl<C> TreeRead for BST<C> where
         Ok(&self.inner[index])
     }
 
+    fn first(&self) -> Result<&C::Output, BSTError> {
+        require!(self.length() != 0, BSTError::EMPTY);
+
+        Ok(&self.inner[1])
+    }
+
+    fn last(&self) -> Result<&C::Output, BSTError> {
+        require!(self.length() != 0, BSTError::EMPTY);
+
+        Ok(&self.inner[self.length()])
+    }
+
+    fn root(&self) -> Result<&C::Output, BSTError> {
+        require!(self.length() != 0, BSTError::EMPTY);
+
+        Ok(&self.inner[root(&self.inner.height())])
+    }
+
     fn contains(&self, node: &C::Output) -> Result<bool, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
         Ok(walker.find(node).is_ok())
@@ -158,6 +176,26 @@ impl<C> TreeReadMut for BST<C> where
         let index: usize = walker.find(node)?;
         Ok(&mut self.inner[index])
     }
+
+    fn first_mut(&mut self) -> Result<&mut Self::Node, Self::Error> {
+        require!(self.length() != 0, BSTError::EMPTY);
+
+        Ok(&mut self.inner[1])
+    }
+
+    fn last_mut(&mut self) -> Result<&mut Self::Node, Self::Error> {
+        require!(self.length() != 0, BSTError::EMPTY);
+        let length: usize = self.length();
+
+        Ok(&mut self.inner[length])
+    }
+
+    fn root_mut(&mut self) -> Result<&mut Self::Node, Self::Error> {
+        require!(self.length() != 0, BSTError::EMPTY);
+        let height: usize = self.inner.height();
+
+        Ok(&mut self.inner[root(&height)])
+    }
 }
 
 impl<C> TreeWrite for BST<C> where
@@ -169,10 +207,11 @@ impl<C> TreeWrite for BST<C> where
             BSTWalkerResult::Existing(index) => {
                 Some(core::mem::replace(&mut self.inner[index], node))
             },
-            BSTWalkerResult::New(index) => {
-                require!(self.inner.has_capacity(), BSTError::Inner(FenwickTreeError::Full));
+            BSTWalkerResult::New(index, side) => {
+                // Inserting always requires capacity - it always expands the array one to the right
+                require!(self.inner.has_capacity(), BSTError::FULL);
 
-                self.inner.insert(index, node);
+                self.inner.insert(index + side as usize, node);
                 None
             }
         })
@@ -180,89 +219,92 @@ impl<C> TreeWrite for BST<C> where
 
     fn delete(&mut self, node: &C::Output) -> Result<C::Output, BSTError> {
         let mut walker: BSTWalker<C> = BSTWalker::new(&self.inner)?;
-        let index: usize = walker.find(&node)?;
+        let index: usize = walker.find(node)?;
 
         Ok(self.inner.remove(index))
     }
 
     fn pop(&mut self) -> Result<C::Output, BSTError> {
-        require!(self.inner.length() > 1, BSTError::Inner(FenwickTreeError::Empty));
+        require!(self.length() != 0, BSTError::EMPTY);
 
-        Ok(self.inner.remove(self.inner.length() - 1))
+        Ok(self.inner.remove(self.length()))
     }
 }
 
 #[derive(Debug, Length)]
 #[length_method(self.view.length())]
-pub struct BSTWalker<'w, C: IndexedCollection + ?Sized> {
+pub struct BSTWalker<'w, C: IndexedCollection> {
     pub view: StatefulTreeView<'w, C>
 }
 
 impl<'w, C> BSTWalker<'w, C> where
-    C: IndexedCollection + ?Sized,
-    C::Output: Sized + PartialOrd
+    C: IndexedCollection,
+    C::Output: PartialOrd + Sized
 {
     pub fn new(inner: &'w C) -> Result<Self, BSTError> {
         // Start at centermost point of tree
-        let start_index: usize = 1 << inner.height();
+        let start_index: usize = root(&inner.height());
 
         Ok(Self {
             view: StatefulTreeView::new(inner, start_index)?
         })
     }
 
-    pub fn allocate(&mut self, key: &C::Output) -> BSTWalkerResult {
+    pub fn allocate(&mut self, key: &impl PartialOrd<C::Output>) -> BSTWalkerResult {
         while self.view.lsb() > 1 {
-            match self.view.current().partial_cmp(&Ok(key)) {
-                Some(Ordering::Greater) | None => {
-                    self.view.traverse(Direction::Down(NodeSide::Left));
-                },
-                Some(Ordering::Less) => {
-                    self.view.traverse(Direction::Down(NodeSide::Right));
-                },
-                Some(Ordering::Equal) => {
-                    return BSTWalkerResult::Existing(self.view.index());
-                }
-            }
+            unwrap_enum!(
+                self.view.current(),
+                self.view.traverse(Direction::Down(NodeSide::Left)),
+                Ok(node) => unwrap_enum!(
+                    key.partial_cmp(node),
+                    panic!("Invariant: PartialCmp failed to return a value"),
+                    Some(Ordering::Greater) => self.view.traverse(Direction::Down(NodeSide::Right)),
+                    Some(Ordering::Less) => self.view.traverse(Direction::Down(NodeSide::Left)),
+                    Some(Ordering::Equal) => return BSTWalkerResult::Existing(self.view.index())
+                )
+            );
         }
 
-        match self.view.current().partial_cmp(&Ok(key)) {
-            // key < current_key || !current_key, insert at current
-            Some(Ordering::Greater) | None => {
-                BSTWalkerResult::New(self.view.index())
-            },
-            // key > current_key, insert one ahead
-            Some(Ordering::Less) => {
-                BSTWalkerResult::New(self.view.index() + 1)
-            },
-            // key == current_key, 
-            Some(Ordering::Equal) => {
-                BSTWalkerResult::Existing(self.view.index())
+        unwrap_enum!(
+            self.view.current(),
+            BSTWalkerResult::New(self.view.index(), NodeSide::Left),
+            Ok(node) => {
+                unwrap_enum!(
+                    key.partial_cmp(node),
+                    panic!("Invariant: PartialCmp failed to return a value"),
+                    Some(Ordering::Greater) => BSTWalkerResult::New(self.view.index(), NodeSide::Right),
+                    Some(Ordering::Less) => BSTWalkerResult::New(self.view.index(), NodeSide::Left),
+                    Some(Ordering::Equal) => BSTWalkerResult::Existing(self.view.index())
+                )
             }
-        }
+        )
     }
 
-    pub fn find(&mut self, key: &C::Output) -> Result<usize, BSTError> {
+    pub fn find(&mut self, key: &impl PartialOrd<C::Output>) -> Result<usize, BSTError> {
         match self.allocate(key) {
             BSTWalkerResult::Existing(index) => Ok(index),
-            BSTWalkerResult::New(_) => Err(BSTError::KeyNotFound)
+            _ => Err(BSTError::KeyNotFound)
         }
     }
 
     pub fn reset(&mut self) {
-        self.view.seek(1 << self.view.height())
+        self.view.seek(root(&self.view.height()))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BSTWalkerResult {
-    New(usize),
+    New(usize, NodeSide),
     Existing(usize)
 }
 
 impl Into<usize> for BSTWalkerResult {
     fn into(self) -> usize {
-        unwrap_enum!(self, i, BSTWalkerResult::Existing(i), BSTWalkerResult::New(i))
+        unwrap_enum!(
+            self,
+            BSTWalkerResult::New(i, side) => i + side as usize,
+            BSTWalkerResult::Existing(i) => i
+        )
     }
 }
 
@@ -270,6 +312,11 @@ impl Into<usize> for BSTWalkerResult {
 pub enum BSTError {
     KeyNotFound,
     Inner(FenwickTreeError)
+}
+
+impl BSTError {
+    pub const EMPTY: Self = BSTError::Inner(FenwickTreeError::Empty);
+    pub const FULL: Self = BSTError::Inner(FenwickTreeError::Full);
 }
 
 impl From<FenwickTreeError> for BSTError {

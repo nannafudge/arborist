@@ -2,7 +2,10 @@ mod common;
 use common::*;
 
 use arborist_proc::interpolate;
-use arborist_core::fenwick::FenwickTreeError;
+use arborist_core::{
+    unwrap_enum,
+    fenwick::FenwickTreeError
+};
 use arborist::bst::{
     BSTWalker, BSTWalkerResult,
     BSTError
@@ -198,10 +201,23 @@ fn bstwalker_allocate() {
     for element in &collection[1..collection.len()] {
         assert_eq!(walker.allocate(element), BSTWalkerResult::Existing(index));
         walker.reset();
-        assert_eq!(walker.allocate(&(element - 1)), BSTWalkerResult::New(index));
+
+        // Elements lt- should be inserted at the current index
+        unwrap_enum!(
+            walker.allocate(&(element - 1)),
+            panic!("Unexpected enum result"),
+            BSTWalkerResult::New(allocated, side) => assert_eq!(allocated + side as usize, index)
+        );
         walker.reset();
-        assert_eq!(walker.allocate(&(element + 1)), BSTWalkerResult::New(index + 1));
+
+        // Elements gt- should be inserted one in-front of the current index
+        unwrap_enum!(
+            walker.allocate(&(element + 1)),
+            panic!("Unexpected enum result"),
+            BSTWalkerResult::New(allocated, side) => assert_eq!(allocated + side as usize, index + 1)
+        );
         walker.reset();
+
         index += 1;
     }
 }
