@@ -6,27 +6,11 @@ use criterion::{
 use rand::{SeedableRng, RngCore};
 use rand::rngs::{SmallRng, OsRng};
 
-const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
+use arborist_core::fenwick::compat::height;
 
 #[inline(always)]
 pub fn lsb(i: &usize) -> usize {
     i & (!i).overflowing_add(1).0
-}
-
-#[inline(always)]
-fn height(length: &usize) -> usize {
-    let mut mid: usize = USIZE_MIDPOINT;
-    let mut cur: usize = USIZE_MIDPOINT;
-
-    while mid > 1 {
-        match length >> cur {
-            1 => break,
-            0 => cur -= { mid >>= 1; mid },
-            _ => cur += { mid >>= 1; mid },
-        }
-    }
-
-    cur + (&lsb(length) != length) as usize
 }
 
 fn bench_fenwick<const N: usize>(b: &mut Criterion) {
@@ -36,7 +20,7 @@ fn bench_fenwick<const N: usize>(b: &mut Criterion) {
     for _ in 0..N {
         let next_val: usize = randomness.next_u32() as usize;
 
-        group.bench_with_input("log2_ceil", &next_val, | bencher, value | {
+        /*group.bench_with_input("log2_ceil", &next_val, | bencher, value | {
             bencher.iter(|| {
                 black_box((*value as f64).log2().ceil() as usize)
             });
@@ -59,15 +43,15 @@ fn bench_fenwick<const N: usize>(b: &mut Criterion) {
             bencher.iter(|| {
                 black_box(usize::MAX - value.leading_zeros() as usize)
             });
-        });
+        });*/
 
         group.bench_with_input("log2_bin_search", &next_val, | bencher, value | {
             bencher.iter(|| {
-                black_box(height(value))
+                black_box(height(*value))
             });
         });
 
-        group.bench_with_input("lsb_cast", &next_val, | bencher, value | {
+        /*group.bench_with_input("lsb_cast", &next_val, | bencher, value | {
             bencher.iter(|| {
                 let raw = *value as isize;
                 black_box((raw & -raw) as usize)
@@ -84,7 +68,7 @@ fn bench_fenwick<const N: usize>(b: &mut Criterion) {
             bencher.iter(|| {
                 black_box(value & (value ^ (value.min(&1) - 1)))
             });
-        });
+        });*/
     }
 
     group.finish();

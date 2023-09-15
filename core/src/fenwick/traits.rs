@@ -6,22 +6,46 @@ use arborist_proc::{
 
 pub use crate::tree::Height;
 
-#[cfg(any(feature = "no_float", test))]
-pub(crate) mod compat {
+#[cfg(any(feature = "no_float", feature = "bench", test))]
+pub mod compat {
     const USIZE_MIDPOINT: usize = (usize::BITS >> 1) as usize;
 
+    // "Optimization" - Jk halved the runtime
+    // TODO: Reduce branching misprediction (hardcoded branching/constants),
+    // reduce branching by one: on final 4 bits via. lookup table
+    #[inline]
     pub fn height(length: usize) -> usize {
-        let mut mid: usize = USIZE_MIDPOINT;
         let mut cur: usize = USIZE_MIDPOINT;
-    
-        while mid > 1 {
-            match length >> cur {
-                1 => break,
-                0 => cur -= { mid >>= 1; mid },
-                _ => cur += { mid >>= 1; mid },
-            }
-        }
-    
+
+        match length >> cur {
+            1 => return cur,
+            0 => cur -= USIZE_MIDPOINT >> 1,
+            _ => cur += USIZE_MIDPOINT >> 1
+        };
+        match length >> cur {
+            1 => return cur,
+            0 => cur -= USIZE_MIDPOINT >> 2,
+            _ => cur += USIZE_MIDPOINT >> 2
+        };
+        #[cfg(any(target_pointer_width = "16", target_pointer_width = "32", target_pointer_width = "64"))]
+        match length >> cur {
+            1 => return cur,
+            0 => cur -= USIZE_MIDPOINT >> 3,
+            _ => cur += USIZE_MIDPOINT >> 3
+        };
+        #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+        match length >> cur {
+            1 => return cur,
+            0 => cur -= USIZE_MIDPOINT >> 4,
+            _ => cur += USIZE_MIDPOINT >> 4
+        };
+        #[cfg(target_pointer_width = "64")]
+        match length >> cur {
+            1 => return cur,
+            0 => cur -= USIZE_MIDPOINT >> 5,
+            _ => cur += USIZE_MIDPOINT >> 5
+        };
+
         cur
     }
 }
@@ -31,7 +55,7 @@ pub use compat::*;
 
 #[cfg(all(not(feature = "no_float"), not(target_pointer_width = "64")))]
 #[inline(always)]
-pub fn height(length: usize) -> usize {
+pub fn height(length: &usize) -> usize {
     (length as f32).log2().floor() as usize
 }
 

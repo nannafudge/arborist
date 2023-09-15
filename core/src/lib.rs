@@ -16,12 +16,20 @@ pub mod tree {
         type Node;
         type Error;
     
-        fn get(&self, node: &Self::Node) -> Result<&Self::Node, Self::Error>;
+        fn get(&self, node: &Self::Node) -> Result<&Self::Node, Self::Error>;        
+        fn first(&self) -> Result<&Self::Node, Self::Error>;
+        fn last(&self) -> Result<&Self::Node, Self::Error>;
+        fn root(&self) -> Result<&Self::Node, Self::Error>;
+
         fn contains(&self, node: &Self::Node) -> Result<bool, Self::Error>;
     }
 
     pub trait TreeReadMut: TreeRead {
         fn get_mut(&mut self, node: &Self::Node) -> Result<&mut Self::Node, Self::Error>;
+
+        fn first_mut(&mut self) -> Result<&mut Self::Node, Self::Error>;
+        fn last_mut(&mut self) -> Result<&mut Self::Node, Self::Error>;
+        fn root_mut(&mut self) -> Result<&mut Self::Node, Self::Error>;
     }
 
     pub trait TreeWrite: TreeReadMut {
@@ -229,13 +237,15 @@ pub enum Direction {
 ################################*/
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(u8)]
 pub enum NodeSide {
-    Left,
-    Right
+    Left = 0,
+    Right = 1
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(u8)]
 pub enum NodeType {
-    Node,
-    Leaf
+    Node = 0,
+    Leaf = 1
 }

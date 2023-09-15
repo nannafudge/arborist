@@ -399,8 +399,8 @@ impl_tests!{probe for StatefulTreeViewMut<[usize]> where collection = mut return
 impl_tests!{current for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 impl_tests!{sibling for StatefulTreeViewMut<[usize]> where collection = mut return = &mut}
 
-mod height_impls {
-    use crate::fenwick::traits::*;
+mod aux_functions {
+    use crate::fenwick;
     use rand::{
         SeedableRng, RngCore
     };
@@ -408,28 +408,47 @@ mod height_impls {
         SmallRng, OsRng
     };
 
+    use lazy_static::lazy_static;
+
     const ITERATIONS: usize = 128;
+    lazy_static!{
+        static ref SEED: u64 = OsRng.next_u64();
+    }
 
     #[test]
-    fn default() {
-        let mut randomness: SmallRng = SmallRng::seed_from_u64(OsRng.next_u64());
+    fn height_default() {
+        let mut randomness: SmallRng = SmallRng::seed_from_u64(*SEED);
         for i in 0..ITERATIONS {
             let val: usize = randomness.next_u64() as usize;
             assert_eq!(
-                height(val), (val as f64).log(2.0).floor() as usize,
-                "Failed at iteration {} with value: {}", i, val
+                fenwick::height(val), (val as f64).log(2.0).floor() as usize,
+                "Failed at iteration {} with value: {}, seed: {}", i, val, *SEED
             );
         }
     }
 
     #[test]
-    fn no_float() {
-        let mut randomness: SmallRng = SmallRng::seed_from_u64(OsRng.next_u64());
+    fn height_compat() {
+        let mut randomness: SmallRng = SmallRng::seed_from_u64(*SEED);
         for i in 0..ITERATIONS {
             let val: usize = randomness.next_u64() as usize;
             assert_eq!(
-                crate::fenwick::compat::height(val), (val as f64).log(2.0).floor() as usize,
-                "Failed at iteration {} with value: {}", i, val
+                fenwick::compat::height(val), (val as f64).log(2.0).floor() as usize,
+                "Failed at iteration {} with value: {}, seed: {}", i, val, *SEED
+            );
+        }
+    }
+
+    #[test]
+    fn root() {
+        let mut randomness: SmallRng = SmallRng::seed_from_u64(*SEED);
+        for i in 0..ITERATIONS {
+            let val: usize = randomness.next_u64() as usize;
+            let height: usize = fenwick::height(val);
+
+            assert_eq!(
+                fenwick::root(&height), 2usize.pow(height as u32),
+                "Failed at iteration {} with value: {}, seed: {}", i, val, *SEED
             );
         }
     }

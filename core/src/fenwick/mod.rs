@@ -34,6 +34,11 @@ pub fn lsb(i: usize) -> usize {
     (_i & -_i) as usize
 }
 
+#[inline(always)]
+pub fn root(height: &usize) -> usize {
+    1 << height
+}
+
 /*################################
               Errors
 ################################*/

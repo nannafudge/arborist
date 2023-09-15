@@ -15,15 +15,16 @@ no_float = []
 default = ["const_vec", "std_vec"]
 
 [dependencies]
-arborist-proc = { version = "0.1.0", path = "../proc" }
-bumpalo = { version = "3.13.0", optional = true }
-tinyvec = { version = "1.6.0", optional = true }
+arborist-proc = { workspace = true }
+bumpalo = { workspace = true, optional = true }
+tinyvec = { workspace = true, optional = true }
 # Bench
-criterion = { version = "0.3.6", optional = true }
+criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
-arborist-proc = { version = "0.1.0", features = ["test_utils"], path = "../proc" }
-rand = { version = "0.8.5", features = ["small_rng"] }
+arborist-proc = { workspace = true, features = ["test_utils"]  }
+rand = { workspace = true, features = ["small_rng"] }
+lazy_static = "1.4.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
