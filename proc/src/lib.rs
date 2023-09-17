@@ -85,23 +85,9 @@ pub fn derive_insertable_collection(input: proc_macro::TokenStream) -> proc_macr
             impl_generics: impl_generics.to_token_stream(),
             ty_generics: ty_generics.to_token_stream(),
             where_clause: where_clause.to_token_stream(),
-            name: parsed.ident
+            name: parsed.ident.to_token_stream()
         }
     )
-}
-
-#[cfg(feature = "test_utils")]
-#[proc_macro]
-pub fn impl_test(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parsed: test_utils::ImplTest = parse_macro_input!(input as test_utils::ImplTest);
-    test_utils::render_impl_test(parsed)
-}
-
-#[cfg(feature = "test_utils")]
-#[proc_macro]
-pub fn impl_mock(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let parsed: syn::Ident = parse_macro_input!(input as syn::Ident);
-    test_utils::render_impl_mock(parsed)
 }
 
 #[proc_macro]
@@ -114,4 +100,18 @@ pub fn interpolate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 
     out.parse().expect("Invalid template")
+}
+
+#[cfg(feature = "test_utils")]
+#[proc_macro_attribute]
+pub fn test_suite(_: proc_macro::TokenStream, target: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let suite: test_utils::TestSuite = parse_macro_input!(target as test_utils::TestSuite);
+    suite.to_token_stream().into()
+}
+
+#[cfg(feature = "test_utils")]
+#[proc_macro]
+pub fn impl_mock(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let parsed: syn::Ident = parse_macro_input!(input as syn::Ident);
+    test_utils::render_impl_mock(parsed)
 }
