@@ -1,15 +1,21 @@
-use quote::{TokenStreamExt, ToTokens};
-use syn::parse::{
-    ParseStream, Parse
+// Not all functions may be used presently, but may be useful later
+#![allow(dead_code)]
+
+use quote::{
+    TokenStreamExt, ToTokens
 };
-use syn::{
-    Attribute, Result,
-    Block, Ident,
-    Type
-};
+
 use proc_macro2::{
-    TokenStream,
-    Delimiter
+    TokenStream, Delimiter
+};
+
+use syn::{
+    Block, Ident,
+    Type, Generics,
+    Attribute, Result,
+    parse::{
+        ParseStream, Parse
+    }
 };
 
 pub fn extract_attribute_inner(input: ParseStream) -> syn::Result<TokenStream> {
@@ -42,14 +48,27 @@ pub fn parse_delim<'c>(delim: Delimiter, input: ParseStream<'c>) -> Result<Token
     })
 }
 
-pub fn greedy_parse<T, F, O>(input: ParseStream, after_hook: F) -> Result<Vec<T>> where
+pub fn greedy_parse<T>(input: ParseStream) -> Result<Vec<T>> where
+    T: Parse
+{
+    let mut out: Vec<T> = Vec::with_capacity(1);
+    while !input.is_empty() {
+        out.push(input.parse::<T>()?);
+    }
+
+    Ok(out)
+}
+
+pub fn greedy_parse_with<T, F, O>(input: ParseStream, after_hook: F) -> Result<Vec<T>> where
     T: Parse,
     F: for<'a> Fn(ParseStream<'a>) -> Result<O>
 {
     let mut out: Vec<T> = Vec::with_capacity(1);
     while !input.is_empty() {
         out.push(input.parse::<T>()?);
-        after_hook(input)?;
+        if !input.is_empty() {
+            after_hook(input)?;
+        }
     }
 
     Ok(out)
@@ -70,4 +89,18 @@ pub fn steal<'c, T: ?Sized>(item: &T) -> &'c T {
     unsafe {
         core::mem::transmute::<&T, &'c T>(item)
     }
+}
+
+pub fn extract_impl_generics(generics: Option<&Generics>) -> TokenStream {
+    generics.and_then(| generics | {
+        let (impl_generics, _, _) = generics.split_for_impl();
+        Some(impl_generics.to_token_stream())
+    }).unwrap_or_default()
+}
+
+pub fn extract_ty_and_where_generics(generics: Option<&Generics>) -> (TokenStream, TokenStream) {
+    generics.and_then(| generics | {
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        Some((ty_generics.to_token_stream(), where_clause.to_token_stream()))
+    }).unwrap_or_default()
 }

@@ -1,19 +1,22 @@
 use proc_macro2::TokenStream;
+
 use quote::{
     ToTokens, quote
 };
+
 use syn::{
     Ident, Expr,
     Result, Generics,
     parse::{ParseStream, Parse},
 };
-use super::{
+
+use crate::common::{
     extract_impl_generics,
     extract_ty_and_where_generics
 };
 
 #[derive(Clone)]
-pub(crate) struct ImplLength {
+pub struct ImplLength {
     pub impl_generics: TokenStream,
     pub ty_generics: TokenStream,
     pub where_clause: TokenStream,
@@ -39,7 +42,7 @@ impl Parse for ImplLength {
 }
 
 #[derive(Default)]
-pub(crate) enum LengthOverride {
+pub enum LengthOverride {
     #[default] None,
     Some(Expr)
 }
@@ -74,13 +77,13 @@ impl From<Result<Expr>> for LengthOverride {
 }
 
 // Type generics are embedded within the Type definition itself
-pub(crate) fn render_impl(parsed: ImplLength, method: LengthOverride) -> proc_macro::TokenStream {
+pub fn render_length_impl(parsed: ImplLength, method: LengthOverride) -> TokenStream {
     let impl_generics = parsed.impl_generics;
     let ty_generics = parsed.ty_generics;
     let where_clause = parsed.where_clause;
     let name = parsed.name;
 
-    let expanded: proc_macro2::TokenStream = quote! {
+    let expanded: TokenStream = quote! {
         impl #impl_generics Length for #name #ty_generics #where_clause {
             fn length(&self) -> usize {
                 #method
@@ -88,5 +91,5 @@ pub(crate) fn render_impl(parsed: ImplLength, method: LengthOverride) -> proc_ma
         }
     };
 
-    proc_macro::TokenStream::from(expanded)
+    expanded
 }

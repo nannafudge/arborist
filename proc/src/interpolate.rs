@@ -3,11 +3,12 @@ use syn::{
     Token
 };
 use syn::parse::{
-    ParseStream, ParseBuffer, Parse
+    ParseStream, ParseBuffer,
+    Parse,
 };
 use proc_macro2::{
+    Delimiter, Ident,
     TokenTree, TokenStream,
-    Delimiter, Ident
 };
 use std::collections::BTreeMap;
 use quote::ToTokens;
@@ -70,22 +71,22 @@ fn execute_function(function: &Function) -> Result<TokenStream> {
     }
 }
 
-pub(crate) enum Function {
-    Format(FnFormat),
-    Select(FnSelect)
-}
-
 pub(crate) struct Interpolate {
     pub template: TokenStream,
     pub vals: BTreeMap<String, TokenStream>
 }
 
-pub(crate) struct FnFormat {
+enum Function {
+    Format(FnFormat),
+    Select(FnSelect)
+}
+
+struct FnFormat {
     formatter: LitStr,
     args: BTreeMap<String, TokenStream>
 }
 
-pub(crate) struct FnSelect {
+struct FnSelect {
     left: TokenStream,
     right: TokenStream,
     selector: bool

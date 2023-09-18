@@ -1,10 +1,19 @@
-use proc_macro2::{TokenStream, Ident};
-use quote::{quote, ToTokens};
+use proc_macro2::{
+    TokenStream, Ident
+};
+
+use quote::{
+    quote, ToTokens
+};
+
 use syn::{
     Generics, Result,
-    parse::{ParseStream, Parse}
+    parse::{
+        ParseStream, Parse
+    }
 };
-use super::{
+
+use crate::common::{
     extract_impl_generics,
     extract_ty_and_where_generics
 };
@@ -37,7 +46,7 @@ impl Parse for ImplInsertable {
 }
 
 
-pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> proc_macro::TokenStream {
+pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> TokenStream {
     let impl_generics = parsed.impl_generics;
     let ty_generics = parsed.ty_generics;
     let where_clause = parsed.where_clause;
@@ -93,5 +102,5 @@ pub(crate) fn render_impl_insertable(parsed: ImplInsertable) -> proc_macro::Toke
         }
     };
 
-    proc_macro::TokenStream::from(expanded)
+    expanded
 }
