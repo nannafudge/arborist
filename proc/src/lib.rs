@@ -1,4 +1,5 @@
 mod length;
+mod common;
 mod collection;
 mod interpolate;
 
@@ -14,7 +15,7 @@ use length::{
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{
-    parse::Parse, parse_macro_input,
+    parse::{Parse, ParseBuffer}, parse_macro_input,
     DeriveInput, Generics
 };
 
@@ -107,6 +108,13 @@ pub fn interpolate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn test_suite(_: proc_macro::TokenStream, target: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let suite: test_utils::TestSuite = parse_macro_input!(target as test_utils::TestSuite);
     suite.to_token_stream().into()
+}
+
+#[cfg(feature = "test_utils")]
+#[proc_macro_attribute]
+pub fn test_case(attr_args: proc_macro::TokenStream, target: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let test_opts: test_utils::TestCase = syn::parse::<test_utils::TestCase>(attr_args).expect("Error parsing test case args");
+    test_utils::render_test_case(test_opts, target)
 }
 
 #[cfg(feature = "test_utils")]

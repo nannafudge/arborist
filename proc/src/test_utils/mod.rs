@@ -1,40 +1,23 @@
 use proc_macro2::TokenStream;
-use quote::TokenStreamExt;
-use syn::{
-    Ident, Block,
-    Attribute
-};
+use syn::{Ident, Item};
 
 mod mocks;
-mod suite;
 mod tests;
+mod suite;
 
 pub use mocks::get_mock;
-pub use suite::TestSuite;
+pub use tests::render_test_case;
 pub use tests::TestCase;
+pub use suite::TestSuite;
+
+trait Print {
+    fn print(&self, target: &Item, tokens: &mut TokenStream);
+}
+
+trait Mutate {
+    fn mutate(&self, target: &mut Item);
+}
 
 pub(crate) fn render_impl_mock(name: Ident) -> proc_macro::TokenStream {
     get_mock(name).into()
-}
-
-#[inline]
-fn steal<'c, T: ?Sized>(item: &T) -> &'c T {
-    unsafe {
-        core::mem::transmute::<&T, &'c T>(item)
-    }
-}
-
-pub fn attribute_name_to_bytes<'c>(attr: &Attribute) -> Option<&'c [u8]> {
-    let name: Option<&'c [u8]> = attr.meta.path().get_ident().map(| ident: &syn::Ident | {
-        steal(ident.to_string().as_bytes())
-    });
-
-    name
-}
-
-pub fn block_to_tokens(body: &Block) -> TokenStream {
-    let mut out: TokenStream = TokenStream::new();
-    out.append_all(&body.stmts);
-
-    out
 }
