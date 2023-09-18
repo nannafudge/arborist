@@ -14,25 +14,27 @@ use syn::{
 };
 
 use super::{
-    Print, Mutate,
-    Printers, Mutators,
     InsertUnique,
+    Print, Printers,
+    Mutate, Mutators,
     macros::{
-        impl_enum_debug,
-        impl_arg_ord_traits
+        impl_arg_errors,
+        impl_unique_arg
     }
 };
 
+mod args;
+use args::*;
+
 #[repr(u8)]
-#[derive(Clone)]
 #[allow(dead_code)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 enum SuitePrinter {
     // Printers should be defined in the order they must apply
     UNIMPLEMENTED
 }
 
-impl_enum_debug!(SuitePrinter, SuitePrinter::UNIMPLEMENTED);
-impl_arg_ord_traits!(SuitePrinter);
+impl_arg_errors!(SuitePrinter, SuitePrinter::UNIMPLEMENTED => "UNIMPLEMENTED");
 
 impl Print for SuitePrinter {
     fn print(&self, _: &Item, _: &mut TokenStream) {
@@ -41,39 +43,25 @@ impl Print for SuitePrinter {
 }
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 enum SuiteMutator {
     // Mutators should be defined in the order they must apply
-    Setup(Vec<Stmt>),
-    Teardown(Vec<Stmt>)
+    Setup(ArgSetup),
+    Teardown(ArgTeardown)
 }
 
-impl_enum_debug!(SuiteMutator, SuiteMutator::Setup(_), SuiteMutator::Teardown(_));
-impl_arg_ord_traits!(SuiteMutator);
+impl_arg_errors!(
+    SuiteMutator,
+    SuiteMutator::Setup(_) => "#[setup] statement",
+    SuiteMutator::Teardown(_) => "#[teardown] statement"
+);
 
 impl Mutate for SuiteMutator {
     fn mutate(&self, target: &mut Item) {
-        if let Item::Fn(function) = target {
-            match self {
-                SuiteMutator::Setup(stmts) => {
-                    for stmt in stmts.iter().rev() {
-                        function.block.stmts.insert(0, stmt.to_owned());
-                    }
-                },
-                SuiteMutator::Teardown(stmts) => {
-                    for stmt in stmts {
-                        function.block.stmts.push(stmt.to_owned());
-                    }
-                }
-            }
-
-            return;
-        }
-
-        panic!(
-            "SuiteMutator: expected function, received syn::Item with {:?}",
-            core::mem::discriminant(target)
-        );
+        match self {
+            SuiteMutator::Setup(arg) => arg.mutate(target),
+            SuiteMutator::Teardown(arg) => arg.mutate(target)
+        };
     }
 }
 
@@ -114,14 +102,18 @@ impl Parse for TestSuite {
                             // TODO: Make suites composable using 'use', where setup/teardown
                             // functions are combined into one as an inheritable strategy
                             mutators.insert_unique(
-                                SuiteMutator::Setup(function.block.stmts.to_owned())
+                                SuiteMutator::Setup(
+                                    ArgSetup(function.block.stmts.to_owned())
+                                )
                             )?;
 
                             is_suite_arg = true;
                         },
                         Some(b"teardown") => {
                             mutators.insert_unique(
-                                SuiteMutator::Teardown(function.block.stmts.to_owned())
+                                SuiteMutator::Teardown(
+                                    ArgTeardown(function.block.stmts.to_owned())
+                                )
                             )?;
 
                             is_suite_arg = true;

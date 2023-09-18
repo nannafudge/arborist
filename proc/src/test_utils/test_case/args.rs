@@ -1,14 +1,18 @@
+use super::{
+    Mutate,
+    impl_unique_arg
+};
+
 use proc_macro2::TokenStream;
-use std::collections::BTreeMap;
 
 use crate::common::{
-    greedy_parse_with,
-    render_let_stmt
+    render_let_stmt,
+    greedy_parse_with
 };
 
 use quote::{
+    format_ident,
     ToTokens, TokenStreamExt,
-    format_ident
 };
 
 use syn::{
@@ -18,51 +22,35 @@ use syn::{
     Result, Token,
     parse::{
         Parse, ParseStream
-    }, PatIdent
-};
-
-use super::{
-    Print, Mutate,
-    KeyValue
+    }
 };
 
 
 #[derive(Clone)]
-pub(crate) struct ArgCreateFor(Vec<Ident>);
+pub struct ArgName(pub Ident);
 
-impl Parse for ArgCreateFor {
+impl Parse for ArgName {
     fn parse(input: ParseStream) -> Result<Self> {
-        let items: Vec<Ident> = greedy_parse_with(input, | input_after: ParseStream | {
-            if !input_after.is_empty() {
-                input_after.parse::<Token![,]>()?;
-            }
-
-            Ok(())
-        })?;
-
-        Ok(Self(items))
+        Ok(Self(input.parse::<Ident>()?))
     }
 }
 
-impl Print for ArgCreateFor {
-    fn print(&self, target: &Item, tokens: &mut TokenStream) {
+impl Mutate for ArgName {
+    fn mutate(&self, target: &mut Item) {
         if let Item::Fn(function) = target {
-            for ident in &self.0 {
-                let mut new_sig = function.sig.clone();
-                new_sig.ident = format_ident!("{}_{}", new_sig.ident, ident.to_string().to_lowercase());
-
-                tokens.append_all(function.attrs.iter());
-                function.vis.to_tokens(tokens);
-                new_sig.to_tokens(tokens);
-                function.block.to_tokens(tokens);
-            }
+            function.sig.ident = format_ident!("{}_{}", function.sig.ident, self.0);
 
             return;
         }
 
-        panic!("Invalid target for ArgCreateFor: {:?}, expected ItemFn", target.to_token_stream());
+        panic!(
+            "ArgName.print(): Expected syn::ItemFn, received syn::Item {:?}",
+            core::mem::discriminant(target)
+        );
     }
 }
+
+impl_unique_arg!(ArgName);
 
 #[derive(Clone)]
 pub(crate) struct ArgWith(Vec<Expr>);
@@ -133,3 +121,5 @@ impl Mutate for ArgWith {
         panic!("ArgWith.mutate(): expected function, received syn::Item {:?}", core::mem::discriminant(target));
     }
 }
+
+impl_unique_arg!(ArgWith);

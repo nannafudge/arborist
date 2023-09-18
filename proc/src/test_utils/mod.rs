@@ -31,7 +31,7 @@ trait InsertUnique<T> {
 
 impl<T: Ord + core::fmt::Debug> InsertUnique<T> for BTreeSet<T> {
     fn insert_unique(&mut self, item: T) -> Result<()> {
-        let err: &str = &format!("Duplicate item: {:?}", &item);
+        let err: &str = &format!("Duplicate {:?}", &item);
 
         if !self.insert(item) {
             return Err(Error::new(
@@ -41,26 +41,6 @@ impl<T: Ord + core::fmt::Debug> InsertUnique<T> for BTreeSet<T> {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct KeyValue<K: Parse, V: Parse> {
-    k: K,
-    v: V
-}
-
-impl<K, V> Parse for KeyValue<K, V> where
-    K: Parse, V: Parse
-{
-    fn parse(input: ParseStream) -> Result<Self> {
-        let key: K = input.parse::<K>()?;
-        input.parse::<Token![=]>()?;
-        
-        Ok(Self {
-            k: key,
-            v: input.parse::<V>()?
-        })
     }
 }
 
@@ -74,45 +54,23 @@ trait Mutate {
 
 #[macro_use]
 mod macros {
-    macro_rules! impl_arg_ord_traits {
-        ($target:ty) => {
-            impl PartialEq for $target {
-                fn eq(&self, other: &Self) -> bool {
-                    core::mem::discriminant(self) == core::mem::discriminant(other)
-                }
+    macro_rules! impl_unique_arg {
+        ($target:ident $(< $($generics:ty)* >)?) => {
+            impl $(<$($generics)*>)? PartialEq for $target $(<$($generics)*>)? {
+                fn eq(&self, _: &Self) -> bool { true }
             }
             
-            impl Eq for $target {}
-            
-            impl PartialOrd for $target {
-                fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-                    ((self as *const $target) as u8).partial_cmp(
-                        &((other as *const $target) as u8)
-                    )
-                }
+            impl $(<$($generics)*>)? Eq for $target $(<$($generics)*>)? {
+
             }
-            
-            impl Ord for $target {
-                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                    self.partial_cmp(other).expect(
-                        stringify!($target, ": Unexpected ord result")
-                    )
-                }
-            }
-        };
-        ($target:ty: unique) => {
-            impl PartialEq for $target {
-                fn eq(&self, other: &Self) -> bool { true }
-            }
-            impl Eq for $target {}
-            
-            impl PartialOrd for $target {
-                fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+
+            impl $(<$($generics)*>)? PartialOrd for $target $(<$($generics)*>)? {
+                fn partial_cmp(&self, _: &Self) -> Option<core::cmp::Ordering> {
                     Some(core::cmp::Ordering::Equal)
                 }
             }
             
-            impl Ord for $target {
+            impl $(<$($generics)*>)? Ord for $target $(<$($generics)*>)? {
                 fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                     self.partial_cmp(other).expect(
                         stringify!($target, ": Unexpected ord result")
@@ -122,14 +80,14 @@ mod macros {
         };
     }
 
-    macro_rules! impl_enum_debug {
-        ($target:ty $(, $variant:pat )+) => {
+    macro_rules! impl_arg_errors {
+        ($target:ty $(, $variant:pat => $name:expr )+) => {
             impl core::fmt::Debug for $target {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                     match self {
                         $(
                             $variant => {
-                                f.debug_tuple("setup").finish()
+                                f.debug_tuple($name).finish()
                             },
                         )+
                     }
@@ -138,6 +96,6 @@ mod macros {
         }
     }
 
-    pub(crate) use impl_arg_ord_traits;
-    pub(crate) use impl_enum_debug;
+    pub(crate) use impl_unique_arg;
+    pub(crate) use impl_arg_errors;
 }

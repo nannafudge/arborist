@@ -1,5 +1,9 @@
-use crate::common::parse_delim;
 use quote::ToTokens;
+
+use crate::common::{
+    attribute_name_to_bytes,
+    parse_delim
+};
 
 use proc_macro2::{
     Delimiter, Span,
@@ -17,13 +21,12 @@ use syn::{
 };
 
 use super::{
-    KeyValue,
-    Print, Mutate,
-    Printers, Mutators,
     InsertUnique,
+    Print, Printers,
+    Mutate, Mutators,
     macros::{
-        impl_enum_debug,
-        impl_arg_ord_traits
+        impl_arg_errors,
+        impl_unique_arg
     }
 };
 
@@ -31,39 +34,45 @@ mod args;
 use args::*;
 
 #[repr(u8)]
-#[derive(Clone)]
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 enum TestPrinter {
-    ArgCreateFor(ArgCreateFor)
+    // Printers should be defined in the order they must apply
+    UNIMPLEMENTED
 }
 
 impl Print for TestPrinter {
-    fn print(&self, target: &Item, tokens: &mut TokenStream) {
-        match self {
-            TestPrinter::ArgCreateFor(arg) => arg.print(target, tokens)
-        };
+    fn print(&self, _: &Item, _: &mut TokenStream) {
+        unimplemented!("No printers currently defined for test_case!");
     }
 }
 
-impl_arg_ord_traits!(TestPrinter);
-impl_enum_debug!(TestPrinter, TestPrinter::ArgCreateFor(_));
+impl_arg_errors!(TestPrinter, TestPrinter::UNIMPLEMENTED => "UNIMPLEMENTED");
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 enum TestMutator {
+    // Mutators should be defined in the order they must apply
+    ArgName(ArgName),
     ArgWith(ArgWith)
 }
 
 impl Mutate for TestMutator {
     fn mutate(&self, target: &mut Item) {
         match self {
-            TestMutator::ArgWith(arg) => arg.mutate(target)
+            TestMutator::ArgWith(arg) => arg.mutate(target),
+            TestMutator::ArgName(arg) => arg.mutate(target)
         };
     }
 }
 
-impl_arg_ord_traits!(TestMutator);
-impl_enum_debug!(TestMutator, TestMutator::ArgWith(_));
+impl_arg_errors!(
+    TestMutator,
+    TestMutator::ArgWith(_) => "with(...) arg",
+    TestMutator::ArgName(name) => &format!("test name: {}", name.0.to_string())
+);
 
+#[allow(dead_code)]
 #[derive(Clone)]
 enum TestArgs {
     Printer(TestPrinter),
@@ -72,21 +81,20 @@ enum TestArgs {
 
 impl Parse for TestArgs {
     fn parse(input: ParseStream) -> Result<Self> {
-        let name = input.parse::<Ident>()?.to_string();
-        match name.as_bytes() {
-            b"create_for" => {
-                let inner: TokenStream = parse_delim(Delimiter::Parenthesis, input)?;
-                Ok(TestArgs::Printer(
-                    TestPrinter::ArgCreateFor(syn::parse2::<ArgCreateFor>(inner)?)
-                ))
-            },
+        let name = input.parse::<Ident>()?;
+        match name.to_string().as_bytes() {
             b"with" => {
                 let inner: TokenStream = parse_delim(Delimiter::Parenthesis, input)?;
                 Ok(TestArgs::Mutator(
                     TestMutator::ArgWith(syn::parse2::<ArgWith>(inner)?)
                 ))
+            },
+            _ => {
+                // Assume the ident is the test name
+                Ok(TestArgs::Mutator(
+                    TestMutator::ArgName(ArgName(name))
+                ))
             }
-            _ => Err(input.error(format!("Unrecognized test case arg: {:?}", name)))
         }
     }
 }
@@ -125,27 +133,46 @@ impl Parse for TestCase {
     }
 }
 
-pub fn render_test_case(test_opts: TestCase, mut target: ItemFn) -> TokenStream {
+pub fn render_test_case(test_case: TestCase, mut target: ItemFn) -> TokenStream {
     let mut out: TokenStream = TokenStream::new();
+    let mut test_cases: Vec<TestCase> = vec![test_case];
 
-    let mut target_fn: Item = {
-        target.attrs.push(test_attribute());
-        Item::Fn(target)
-    };
-
-    // Apply mutators first (ala. only transforms/mutates elements)
-    test_opts.mutators.iter().for_each(| m | m.mutate(&mut target_fn));
-
-    // If printers are present, allow such to control
-    // the rendering of the function test function -
-    // else, render the function
-    if test_opts.printers.is_empty() {
-        target_fn.to_tokens(&mut out);
-        return out;
+    // Search for other test case attributes, plucking such from the fn def if present
+    for i in 0..target.attrs.len() {
+        if attribute_name_to_bytes(&target.attrs[i]) == Some(b"test_case") {
+            test_cases.push(
+                target.attrs.remove(i)
+                    .parse_args_with(TestCase::parse)
+                    .expect("Error parsing test case")
+                );
+        }
     }
 
-    // Apply printers (ala. only creates elements) last
-    test_opts.printers.iter().for_each(| p | p.print(&target_fn, &mut out));
+    for test in test_cases {
+        let mut test_case_out: TokenStream = TokenStream::new();
+
+        let mut target_fn: Item = {
+            let mut local_fn: ItemFn = target.clone();
+            local_fn.attrs.push(test_attribute());
+            Item::Fn(local_fn)
+        };
+
+        // Apply mutators first (ala. only transforms/mutates elements)
+        test.mutators.iter().for_each(| m | m.mutate(&mut target_fn));
+
+        // Apply printers (ala. only creates elements) last
+
+        // If printers are present, allow such to control
+        // the rendering of the function test function -
+        // else, render the function
+        if test.printers.is_empty() {
+            target_fn.to_tokens(&mut test_case_out);
+        } else {
+            test.printers.iter().for_each(| p | p.print(&target_fn, &mut test_case_out));
+        }
+
+        test_case_out.to_tokens(&mut out);
+    }
 
     out
 }
