@@ -18,7 +18,7 @@ use syn::{
     Result, Token,
     parse::{
         Parse, ParseStream
-    }
+    }, PatIdent
 };
 
 use super::{
@@ -65,11 +65,11 @@ impl Print for ArgCreateFor {
 }
 
 #[derive(Clone)]
-pub(crate) struct ArgWith(Vec<KeyValue<Ident, Expr>>);
+pub(crate) struct ArgWith(Vec<Expr>);
 
 impl Parse for ArgWith {
     fn parse(input: ParseStream) -> Result<Self> {
-        let items: Vec<KeyValue<Ident, Expr>> = greedy_parse_with(input, | input_after: ParseStream | {
+        let items: Vec<Expr> = greedy_parse_with(input, | input_after: ParseStream | {
             if !input_after.is_empty() {
                 input_after.parse::<Token![,]>()?;
             }
@@ -94,37 +94,35 @@ impl Mutate for ArgWith {
             let inputs = core::mem::take(&mut function.sig.inputs);
             function.sig.to_tokens(&mut new_fn_def);
 
-            let input_map: BTreeMap<String, Box<Type>> = BTreeMap::from_iter(
-                inputs.iter().map(| arg | {
-                    if let FnArg::Typed(inner) = arg {
-                        if let syn::Pat::Ident(name) = inner.pat.as_ref() {
-                            return (
-                                name.ident.to_string(),
-                                inner.ty.to_owned()
-                            );
-                        }
+            // Extract fn inputs, preserving their order, mapping such to their ident & type
+            let mut input_map = inputs.iter().map(| arg | {
+                if let FnArg::Typed(item) = arg {
+                    if let syn::Pat::Ident(decl) = item.pat.as_ref() {
+                        return (&decl.ident, &item.ty)
                     }
-    
-                    panic!("Unexpected test input: {:?}", arg.to_token_stream());
-                })
-            );
+                }
 
+                panic!("Unexpected function arg: syn::FnArg {:?}", core::mem::discriminant(arg))
+            });
+    
             // Insert input value statements parsed from attribute directly into fn body
             function.block.brace_token.surround(&mut new_fn_def, | test_body | {
                 for stmt in &self.0 {
-                    // Fetch the corresponding type from the previous function inputs
-                    let stmt_ty: &Box<Type> = input_map.get(&stmt.k.to_string()).expect(
-                        &format!("No corresponding input argument defined on test function signature for {:?}", stmt.k)
+                    let stmt_meta: (&Ident, &Box<Type>) = input_map.next().expect(
+                        &format!(
+                            "No corresponding input argument defined on test function signature for {:?}",
+                            stmt.to_token_stream()
+                        )
                     );
 
-                    render_let_stmt(&stmt.k, stmt_ty, &stmt.v, test_body);
+                    render_let_stmt(&stmt_meta.0, &stmt_meta.1, stmt, test_body);
                 }
 
                 test_body.append_all(function.block.stmts.iter());
             });
 
             let new_fn: ItemFn = syn::parse2::<ItemFn>(new_fn_def)
-                .expect("mutate(): Error creating new function def");
+                .expect("ArgWith.mutate(): Error creating new function def");
 
             // Replace the old function with the new mutation
             *target = Item::Fn(new_fn);
@@ -132,6 +130,6 @@ impl Mutate for ArgWith {
             return;
         }
 
-        panic!("Invalid target for ArgCreateFor: {:?}, expected ItemFn", target.to_token_stream());
+        panic!("ArgWith.mutate(): expected function, received syn::Item {:?}", core::mem::discriminant(target));
     }
 }
