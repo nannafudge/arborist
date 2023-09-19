@@ -1,3 +1,11 @@
+use proc_macro::TokenStream;
+use quote::ToTokens;
+use syn::{
+    parse::Parse,
+    parse_macro_input,
+    DeriveInput
+};
+
 mod length;
 mod common;
 mod collection;
@@ -12,14 +20,6 @@ use length::*;
 
 #[cfg(feature = "test_utils")]
 use test_utils::*;
-
-use proc_macro::TokenStream;
-use quote::ToTokens;
-use syn::{
-    parse::Parse,
-    parse_macro_input,
-    DeriveInput
-};
 
 #[proc_macro_attribute]
 pub fn length_method(_: TokenStream, target: TokenStream) -> TokenStream {

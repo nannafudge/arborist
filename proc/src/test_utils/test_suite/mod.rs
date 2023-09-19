@@ -1,10 +1,10 @@
-use crate::common::attribute_name_to_bytes;
-use proc_macro2::TokenStream;
 use quote::ToTokens;
+use proc_macro2::TokenStream;
+use crate::common::attribute_name_to_bytes;
 
 use syn::{
-    Item, Stmt,
-    Result, Ident,
+    Result,
+    Item, Ident,
     token::{
         Brace, Mod
     },
@@ -14,9 +14,8 @@ use syn::{
 };
 
 use super::{
-    InsertUnique,
-    Print, Printers,
     Mutate, Mutators,
+    InsertUnique,
     macros::{
         impl_arg_errors,
         impl_unique_arg
@@ -25,22 +24,6 @@ use super::{
 
 mod args;
 use args::*;
-
-#[repr(u8)]
-#[allow(dead_code)]
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
-enum SuitePrinter {
-    // Printers should be defined in the order they must apply
-    UNIMPLEMENTED
-}
-
-impl_arg_errors!(SuitePrinter, SuitePrinter::UNIMPLEMENTED => "UNIMPLEMENTED");
-
-impl Print for SuitePrinter {
-    fn print(&self, _: &Item, _: &mut TokenStream) {
-        unimplemented!("No printer implementations exist for TestSuites yet");
-    }
-}
 
 #[repr(u8)]
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -68,7 +51,6 @@ impl Mutate for SuiteMutator {
 #[derive(Clone)]
 pub struct TestSuite {
     name: Ident,
-    printers: Printers<SuitePrinter>,
     mutators: Mutators<SuiteMutator>,
     contents: Vec<Item>
 }
@@ -79,14 +61,11 @@ impl Parse for TestSuite {
         if target.content.is_none() {
             return Ok(Self{
                 name: target.ident,
-                printers: Printers::new(),
                 mutators: Mutators::new(),
                 contents: Vec::new()
             });
         }
 
-        // WARN: This should be made mutable when a suite printer is implemented
-        let printers: Printers<SuitePrinter> = Printers::new();
         let mut mutators: Mutators<SuiteMutator> = Mutators::new();
         let mut contents: Vec<Item> = Vec::with_capacity(1);
 
@@ -96,11 +75,11 @@ impl Parse for TestSuite {
             if let Item::Fn(function) = item {
                 let mut attributes = function.attrs.iter();
 
+                // TODO: Make suites composable using 'use', where setup/teardown
+                // functions are combined into one as an inheritable strategy
                 while let Some(attr) = attributes.next() {
                     match attribute_name_to_bytes(attr) {
                         Some(b"setup") => {
-                            // TODO: Make suites composable using 'use', where setup/teardown
-                            // functions are combined into one as an inheritable strategy
                             mutators.insert_unique(
                                 SuiteMutator::Setup(
                                     ArgSetup(function.block.stmts.to_owned())
@@ -131,7 +110,6 @@ impl Parse for TestSuite {
 
         Ok(Self {
             name: target.ident,
-            printers,
             mutators,
             contents
         })
@@ -155,16 +133,10 @@ pub fn render_test_suite(mut test_suite: TestSuite) -> TokenStream {
                     });
 
                 if is_test {
-                    test_suite.mutators.iter().for_each(| m | m.mutate(item));
-
-                    // Allow printers to control formatting/output of item
-                    if !test_suite.printers.is_empty() {
-                        test_suite.printers.iter().for_each(| p | p.print(item, suite_inner));
-                        continue;
-                    }
+                    test_suite.mutators.mutate(item);
                 }
             }
-    
+
             item.to_tokens(suite_inner);
         }
     });

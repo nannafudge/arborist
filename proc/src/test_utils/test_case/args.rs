@@ -2,19 +2,15 @@ use super::{
     Mutate,
     impl_unique_arg
 };
-
 use proc_macro2::TokenStream;
-
 use crate::common::{
     render_let_stmt,
     greedy_parse_with
 };
-
 use quote::{
     format_ident,
     ToTokens, TokenStreamExt,
 };
-
 use syn::{
     Ident, Expr,
     Type, FnArg,
@@ -24,7 +20,6 @@ use syn::{
         Parse, ParseStream
     }
 };
-
 
 #[derive(Clone)]
 pub struct ArgName(pub Ident);

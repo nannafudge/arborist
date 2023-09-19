@@ -1,13 +1,8 @@
 use std::collections::BTreeSet;
-use proc_macro2::{
-    TokenStream, Span
-};
+use proc_macro2::Span;
 use syn::{
-    Token, Item,
-    Result, Error,
-    parse::{
-        Parse, ParseStream
-    }
+    Item,
+    Result, Error
 };
 
 mod mocks;
@@ -23,13 +18,16 @@ pub use test_suite::{
 };
 
 type Mutators<T> = BTreeSet<T>;
-type Printers<T> = BTreeSet<T>;
 
-trait InsertUnique<T> {
-    fn insert_unique(&mut self, item: T) -> Result<()>;
+impl<T: Mutate> Mutate for Mutators<T> {
+    fn mutate(&self, target: &mut Item) {
+        for mutator in self {
+            mutator.mutate(target);
+        }
+    }
 }
 
-impl<T: Ord + core::fmt::Debug> InsertUnique<T> for BTreeSet<T> {
+impl<T: Ord + core::fmt::Debug> InsertUnique<T> for Mutators<T> {
     fn insert_unique(&mut self, item: T) -> Result<()> {
         let err: &str = &format!("Duplicate {:?}", &item);
 
@@ -44,33 +42,33 @@ impl<T: Ord + core::fmt::Debug> InsertUnique<T> for BTreeSet<T> {
     }
 }
 
-trait Print {
-    fn print(&self, target: &Item, tokens: &mut TokenStream);
-}
-
 trait Mutate {
     fn mutate(&self, target: &mut Item);
+}
+
+trait InsertUnique<T> {
+    fn insert_unique(&mut self, item: T) -> Result<()>;
 }
 
 #[macro_use]
 mod macros {
     macro_rules! impl_unique_arg {
-        ($target:ident $(< $($generics:ty)* >)?) => {
-            impl $(<$($generics)*>)? PartialEq for $target $(<$($generics)*>)? {
+        ($target:ident $(< $generic:tt $(, $generics:tt)? >)?) => {
+            impl $(< $generic $(, $generics)? >)? PartialEq for $target $(<$generic $(, $generics)?>)? {
                 fn eq(&self, _: &Self) -> bool { true }
             }
             
-            impl $(<$($generics)*>)? Eq for $target $(<$($generics)*>)? {
+            impl $(<$generic $(, $generics)?>)? Eq for $target $(<$generic $(, $generics)?>)? {
 
             }
 
-            impl $(<$($generics)*>)? PartialOrd for $target $(<$($generics)*>)? {
+            impl $(<$generic $(, $generics)?>)? PartialOrd for $target $(<$generic $(, $generics)?>)? {
                 fn partial_cmp(&self, _: &Self) -> Option<core::cmp::Ordering> {
                     Some(core::cmp::Ordering::Equal)
                 }
             }
             
-            impl $(<$($generics)*>)? Ord for $target $(<$($generics)*>)? {
+            impl $(<$generic $(, $generics)?>)? Ord for $target $(<$generic $(, $generics)?>)? {
                 fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                     self.partial_cmp(other).expect(
                         stringify!($target, ": Unexpected ord result")

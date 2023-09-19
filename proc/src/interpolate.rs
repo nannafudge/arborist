@@ -1,10 +1,10 @@
 use syn::{
+    Token,
     Result, LitStr,
-    Token
-};
-use syn::parse::{
-    ParseStream, ParseBuffer,
-    Parse,
+    parse::{
+        Parse,
+        ParseStream, ParseBuffer
+    }
 };
 use proc_macro2::{
     Delimiter, Ident,

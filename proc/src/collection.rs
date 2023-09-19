@@ -1,18 +1,15 @@
 use proc_macro2::{
     TokenStream, Ident
 };
-
 use quote::{
     quote, ToTokens
 };
-
 use syn::{
     Generics, Result,
     parse::{
         ParseStream, Parse
     }
 };
-
 use crate::common::{
     extract_impl_generics,
     extract_ty_and_where_generics

@@ -1,18 +1,15 @@
 use quote::ToTokens;
-
 use crate::common::{
-    attribute_name_to_bytes,
-    parse_delim
+    parse_delim,
+    attribute_name_to_bytes
 };
-
 use proc_macro2::{
+    TokenStream,
     Delimiter, Span,
-    TokenStream
 };
-
 use syn::{
-    Result, Token,
     Ident, Item,
+    Result, Token,
     ItemFn, Attribute,
     AttrStyle,
     parse::{
@@ -22,7 +19,6 @@ use syn::{
 
 use super::{
     InsertUnique,
-    Print, Printers,
     Mutate, Mutators,
     macros::{
         impl_arg_errors,
@@ -32,22 +28,6 @@ use super::{
 
 mod args;
 use args::*;
-
-#[repr(u8)]
-#[allow(dead_code)]
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
-enum TestPrinter {
-    // Printers should be defined in the order they must apply
-    UNIMPLEMENTED
-}
-
-impl Print for TestPrinter {
-    fn print(&self, _: &Item, _: &mut TokenStream) {
-        unimplemented!("No printers currently defined for test_case!");
-    }
-}
-
-impl_arg_errors!(TestPrinter, TestPrinter::UNIMPLEMENTED => "UNIMPLEMENTED");
 
 #[repr(u8)]
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
@@ -72,28 +52,16 @@ impl_arg_errors!(
     TestMutator::ArgName(name) => &format!("test name: {}", name.0.to_string())
 );
 
-#[allow(dead_code)]
-#[derive(Clone)]
-enum TestArgs {
-    Printer(TestPrinter),
-    Mutator(TestMutator)
-}
-
-impl Parse for TestArgs {
+impl Parse for TestMutator {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = input.parse::<Ident>()?;
         match name.to_string().as_bytes() {
             b"with" => {
-                let inner: TokenStream = parse_delim(Delimiter::Parenthesis, input)?;
-                Ok(TestArgs::Mutator(
-                    TestMutator::ArgWith(syn::parse2::<ArgWith>(inner)?)
-                ))
+                Ok(TestMutator::ArgWith(parse_arg_parameterized(input)?))
             },
             _ => {
                 // Assume the ident is the test name
-                Ok(TestArgs::Mutator(
-                    TestMutator::ArgName(ArgName(name))
-                ))
+                Ok(TestMutator::ArgName(ArgName(name)))
             }
         }
     }
@@ -101,24 +69,15 @@ impl Parse for TestArgs {
 
 #[derive(Clone)]
 pub struct TestCase {
-    printers: Printers<TestPrinter>,
     mutators: Mutators<TestMutator>
 }
 
 impl Parse for TestCase {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut printers: Printers<TestPrinter> = Printers::new();
         let mut mutators: Mutators<TestMutator> = Mutators::new();
         
         while !input.is_empty() {
-            match input.parse::<TestArgs>()? {
-                TestArgs::Printer(printer) => {
-                    printers.insert_unique(printer)?;
-                },
-                TestArgs::Mutator(mutator) => {
-                    mutators.insert_unique(mutator)?;
-                }
-            }
+            mutators.insert_unique(input.parse::<TestMutator>()?)?;
 
             // If more args to be parsed
             if !input.is_empty() {
@@ -127,10 +86,14 @@ impl Parse for TestCase {
         }
 
         Ok(Self {
-            printers,
             mutators
         })
     }
+}
+
+fn parse_arg_parameterized<T: Parse>(input: ParseStream) -> Result<T> {
+    let arg_inner: TokenStream = parse_delim(Delimiter::Parenthesis, input)?;
+    syn::parse2::<T>(arg_inner)
 }
 
 pub fn render_test_case(test_case: TestCase, mut target: ItemFn) -> TokenStream {
@@ -149,29 +112,14 @@ pub fn render_test_case(test_case: TestCase, mut target: ItemFn) -> TokenStream 
     }
 
     for test in test_cases {
-        let mut test_case_out: TokenStream = TokenStream::new();
-
         let mut target_fn: Item = {
             let mut local_fn: ItemFn = target.clone();
             local_fn.attrs.push(test_attribute());
             Item::Fn(local_fn)
         };
 
-        // Apply mutators first (ala. only transforms/mutates elements)
-        test.mutators.iter().for_each(| m | m.mutate(&mut target_fn));
-
-        // Apply printers (ala. only creates elements) last
-
-        // If printers are present, allow such to control
-        // the rendering of the function test function -
-        // else, render the function
-        if test.printers.is_empty() {
-            target_fn.to_tokens(&mut test_case_out);
-        } else {
-            test.printers.iter().for_each(| p | p.print(&target_fn, &mut test_case_out));
-        }
-
-        test_case_out.to_tokens(&mut out);
+        test.mutators.mutate(&mut target_fn);
+        target_fn.to_tokens(&mut out);
     }
 
     out
