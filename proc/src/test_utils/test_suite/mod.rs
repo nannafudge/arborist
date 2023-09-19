@@ -1,7 +1,6 @@
-use quote::ToTokens;
-use proc_macro2::TokenStream;
 use crate::common::attribute_name_to_bytes;
-
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::{
     Result,
     Item, Ident,
@@ -14,12 +13,9 @@ use syn::{
 };
 
 use super::{
-    Mutate, Mutators,
     InsertUnique,
-    macros::{
-        impl_arg_errors,
-        impl_unique_arg
-    }
+    Mutate, Mutators,
+    macros::*
 };
 
 mod args;
@@ -33,17 +29,20 @@ enum SuiteMutator {
     Teardown(ArgTeardown)
 }
 
-impl_arg_errors!(
-    SuiteMutator,
-    SuiteMutator::Setup(_) => "#[setup] statement",
-    SuiteMutator::Teardown(_) => "#[teardown] statement"
-);
-
 impl Mutate for SuiteMutator {
-    fn mutate(&self, target: &mut Item) {
+    fn mutate(self, target: &mut Item) {
         match self {
             SuiteMutator::Setup(arg) => arg.mutate(target),
             SuiteMutator::Teardown(arg) => arg.mutate(target)
+        };
+    }
+}
+
+impl ToTokens for SuiteMutator {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            SuiteMutator::Setup(arg) => arg.to_tokens(tokens),
+            SuiteMutator::Teardown(arg) => arg.to_tokens(tokens)
         };
     }
 }
@@ -53,6 +52,14 @@ pub struct TestSuite {
     name: Ident,
     mutators: Mutators<SuiteMutator>,
     contents: Vec<Item>
+}
+
+impl Mutate for TestSuite {
+    fn mutate(mut self, target: &mut Item) {
+        while let Some(mutator) = self.mutators.pop_first() {
+            mutator.mutate(target);
+        }
+    }
 }
 
 impl Parse for TestSuite {
@@ -69,30 +76,26 @@ impl Parse for TestSuite {
         let mut mutators: Mutators<SuiteMutator> = Mutators::new();
         let mut contents: Vec<Item> = Vec::with_capacity(1);
 
-        for item in &mut target.content.expect("NO CONTENT").1 {
+        // TODO: Make suites composable using 'use', where setup/teardown
+        // functions are combined into one as an inheritable strategy
+        // TODO: Detect #[setup]/#[teardown] on invalid Items, reporting such correctly
+        for item in target.content.expect("Invariant: Empty suite").1 {
+            // We need to clone the stmts regardless, to support
+            // functions that are tagged as both setup and teardown
             let mut is_suite_arg: bool = false;
-
-            if let Item::Fn(function) = item {
-                let mut attributes = function.attrs.iter();
-
-                // TODO: Make suites composable using 'use', where setup/teardown
-                // functions are combined into one as an inheritable strategy
-                while let Some(attr) = attributes.next() {
+            if let Item::Fn(item) = &item {
+                for attr in &item.attrs {
                     match attribute_name_to_bytes(attr) {
                         Some(b"setup") => {
                             mutators.insert_unique(
-                                SuiteMutator::Setup(
-                                    ArgSetup(function.block.stmts.to_owned())
-                                )
+                                SuiteMutator::Setup(ArgSetup(item.block.stmts.to_owned()))
                             )?;
 
                             is_suite_arg = true;
                         },
                         Some(b"teardown") => {
                             mutators.insert_unique(
-                                SuiteMutator::Teardown(
-                                    ArgTeardown(function.block.stmts.to_owned())
-                                )
+                                SuiteMutator::Teardown(ArgTeardown(item.block.stmts.to_owned()))
                             )?;
 
                             is_suite_arg = true;
@@ -103,9 +106,8 @@ impl Parse for TestSuite {
             }
 
             if !is_suite_arg {
-                contents.push(core::mem::replace(item, Item::Verbatim(TokenStream::new())));
+                contents.push(item);
             }
-
         }
 
         Ok(Self {
@@ -133,7 +135,9 @@ pub fn render_test_suite(mut test_suite: TestSuite) -> TokenStream {
                     });
 
                 if is_test {
-                    test_suite.mutators.mutate(item);
+                    while let Some(mutator) = test_suite.mutators.pop_first() {
+                        mutator.mutate(item);
+                    }
                 }
             }
 

@@ -1,16 +1,17 @@
-use syn::Ident;
-use quote::quote;
+use crate::common::error_spanned;
 use proc_macro2::TokenStream;
+use quote::quote;
+use syn::Ident;
 
 // 10/10 builder pattern
 
 pub fn get_mock(name: Ident) -> TokenStream {
     match name.to_string().as_str() {
         "MockCollection" => {
-            return mock_collection();
+            mock_collection()
         },
         _ => {
-            panic!("Unrecognized Mock: {}", name.to_string().as_str());
+            error_spanned!("Unrecognized mock: {}", &name).to_compile_error()
         }
     }
 }

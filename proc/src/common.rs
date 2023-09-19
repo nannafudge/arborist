@@ -1,17 +1,14 @@
 // Not all functions may be used presently, but may be useful later
-#![allow(dead_code)]
-
+#![allow(dead_code, unused_macros)]
 use quote::{
     TokenStreamExt, ToTokens
 };
-
 use proc_macro2::{
-    TokenStream, Delimiter
+    Delimiter,
+    TokenStream, TokenTree
 };
-
 use syn::{
-    Block, Ident,
-    Type, Generics,
+    Block, Generics,
     Attribute, Result,
     parse::{
         ParseStream, Parse
@@ -74,14 +71,28 @@ pub fn greedy_parse_with<T, F, O>(input: ParseStream, after_hook: F) -> Result<V
     Ok(out)
 }
 
-pub fn render_let_stmt<T: ToTokens>(ident: &Ident, ty: &Type, value: &T, tokens: &mut TokenStream) {
-    syn::token::Let::default().to_tokens(tokens);
-    ident.to_tokens(tokens);
-    syn::token::Colon::default().to_tokens(tokens);
-    ty.to_tokens(tokens);
-    syn::token::Eq::default().to_tokens(tokens);
-    value.to_tokens(tokens);
-    syn::token::Semi::default().to_tokens(tokens);
+pub fn peek_next_tt(input: ParseStream) -> Result<TokenTree> {
+    input.step(| cursor | {
+        if let Some((tt, _)) = cursor.token_tree() {
+            return Ok((tt, *cursor));
+        }
+
+        Err(cursor.error("Unexpected end of stream: Expected tokens"))
+    })
+}
+
+pub fn result_to_tokens<T: ToTokens>(res: Result<T>, out: &mut TokenStream) {
+    match res {
+        Ok(item) => item.to_tokens(out),
+        Err(e) => e.to_compile_error().to_tokens(out)
+    }
+}
+
+pub fn result_to_tokens_with<T, F: Fn(T, &mut TokenStream)>(res: Result<T>, out: &mut TokenStream, func: F) {
+    match res {
+        Ok(item) => func(item, out),
+        Err(e) => e.to_compile_error().to_tokens(out)
+    }
 }
 
 #[inline]
@@ -104,3 +115,20 @@ pub fn extract_ty_and_where_generics(generics: Option<&Generics>) -> (TokenStrea
         Some((ty_generics.to_token_stream(), where_clause.to_token_stream()))
     }).unwrap_or_default()
 }
+
+#[macro_use]
+mod macros {
+    macro_rules! error_spanned {
+        ($formatter:literal, $item:expr $(, $other_items:expr )?) => {
+            syn::Error::new(syn::spanned::Spanned::span($item), &format!(
+                $formatter, quote::ToTokens::to_token_stream($item) $(, quote::ToTokens::to_token_stream($other_items))?
+            ))
+        };
+    }
+    
+    pub(crate) use error_spanned;
+}
+
+// Compiler u very dumbb
+#[allow(unused_imports)]
+pub(crate) use macros::error_spanned;

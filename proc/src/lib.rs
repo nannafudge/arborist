@@ -103,9 +103,9 @@ pub fn test_suite(_: TokenStream, target: TokenStream) -> TokenStream {
 pub fn test_case(attr_args: TokenStream, target: TokenStream) -> TokenStream {
     use syn::ItemFn;
 
-    let test_opts: TestCase = syn::parse::<TestCase>(attr_args).expect("Error parsing test case attribute");
-    let test_fn: ItemFn = syn::parse::<ItemFn>(target).expect("Error parsing test function");
-    render_test_case(test_opts, test_fn).into()
+    let test_case: TestCase = parse_macro_input!(attr_args as TestCase);
+    let test_fn: ItemFn = parse_macro_input!(target as ItemFn);
+    render_test_case(test_case, test_fn).into()
 }
 
 #[cfg(feature = "test_utils")]

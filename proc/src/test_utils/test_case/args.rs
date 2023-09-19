@@ -1,21 +1,20 @@
+use proc_macro2::TokenStream;
 use super::{
     Mutate,
-    impl_unique_arg
+    impl_unique_arg,
+    impl_to_tokens_wrapped
 };
-use proc_macro2::TokenStream;
 use crate::common::{
-    render_let_stmt,
-    greedy_parse_with
+    greedy_parse_with, error_spanned,
+    result_to_tokens_with, result_to_tokens
 };
 use quote::{
     format_ident,
     ToTokens, TokenStreamExt,
 };
 use syn::{
-    Ident, Expr,
-    Type, FnArg,
-    Item, ItemFn,
-    Result, Token,
+    Ident, Expr, Item, Token,
+    FnArg, ItemFn, Result,
     parse::{
         Parse, ParseStream
     }
@@ -31,21 +30,19 @@ impl Parse for ArgName {
 }
 
 impl Mutate for ArgName {
-    fn mutate(&self, target: &mut Item) {
+    fn mutate(self, target: &mut Item) {
         if let Item::Fn(function) = target {
             function.sig.ident = format_ident!("{}_{}", function.sig.ident, self.0);
 
             return;
         }
-
-        panic!(
-            "ArgName.print(): Expected syn::ItemFn, received syn::Item {:?}",
-            core::mem::discriminant(target)
-        );
+        
+        panic!("{}", error_spanned!("#[test_case]: {} is not a function", target));
     }
 }
 
 impl_unique_arg!(ArgName);
+impl_to_tokens_wrapped!(ArgName);
 
 #[derive(Clone)]
 pub(crate) struct ArgWith(Vec<Expr>);
@@ -65,7 +62,7 @@ impl Parse for ArgWith {
 }
 
 impl Mutate for ArgWith {
-    fn mutate(&self, target: &mut Item) {
+    fn mutate(self, target: &mut Item) {
         if let Item::Fn(function) = target {
             let mut new_fn_def: TokenStream = TokenStream::new();
 
@@ -81,40 +78,50 @@ impl Mutate for ArgWith {
             let mut input_map = inputs.iter().map(| arg | {
                 if let FnArg::Typed(item) = arg {
                     if let syn::Pat::Ident(decl) = item.pat.as_ref() {
-                        return (&decl.ident, &item.ty)
+                        return Ok(decl);
                     }
+
+                    return Err(error_spanned!("{}: expected `ident: ty` mapping", item));
                 }
 
-                panic!("Unexpected function arg: syn::FnArg {:?}", core::mem::discriminant(arg))
+                Err(error_spanned!("{}: Invalid input", arg))
             });
-    
+
+            // TODO: Switch this the other way around (go through fn args
+            // matching such against with()) - it's more intuitive
             // Insert input value statements parsed from attribute directly into fn body
             function.block.brace_token.surround(&mut new_fn_def, | test_body | {
                 for stmt in &self.0 {
-                    let stmt_meta: (&Ident, &Box<Type>) = input_map.next().expect(
-                        &format!(
-                            "No corresponding input argument defined on test function signature for {:?}",
-                            stmt.to_token_stream()
-                        )
+                    let maybe_stmt_meta: Result<Result<&syn::PatIdent>> = input_map.next().ok_or(
+                        error_spanned!("{}: missing corresponding argument", stmt)
                     );
 
-                    render_let_stmt(&stmt_meta.0, &stmt_meta.1, stmt, test_body);
+                    result_to_tokens_with(maybe_stmt_meta, test_body, | stmt_meta, tokens | {
+                        syn::token::Let::default().to_tokens(tokens);
+                        result_to_tokens(stmt_meta, tokens);
+                        syn::token::Eq::default().to_tokens(tokens);
+                        stmt.to_tokens(tokens);
+                        syn::token::Semi::default().to_tokens(tokens);
+                    });
                 }
 
                 test_body.append_all(function.block.stmts.iter());
             });
 
-            let new_fn: ItemFn = syn::parse2::<ItemFn>(new_fn_def)
-                .expect("ArgWith.mutate(): Error creating new function def");
+            let new_fn = syn::parse2::<ItemFn>(new_fn_def);
+            if new_fn.is_err() {
+                panic!("{}", error_spanned!("with(): Error creating new function def: {}", &target))
+            }
 
             // Replace the old function with the new mutation
-            *target = Item::Fn(new_fn);
+            *target = Item::Fn(new_fn.unwrap());
 
             return;
         }
 
-        panic!("ArgWith.mutate(): expected function, received syn::Item {:?}", core::mem::discriminant(target));
+        panic!("{}", error_spanned!("#[test_case]: {} is not a function", target));
     }
 }
 
 impl_unique_arg!(ArgWith);
+impl_to_tokens_wrapped!(ArgWith: collection);

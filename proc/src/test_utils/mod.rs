@@ -1,8 +1,9 @@
+use crate::common::error_spanned;
 use std::collections::BTreeSet;
-use proc_macro2::Span;
+use quote::ToTokens;
 use syn::{
-    Item,
-    Result, Error
+    Item, Result,
+    spanned::Spanned
 };
 
 mod mocks;
@@ -19,23 +20,11 @@ pub use test_suite::{
 
 type Mutators<T> = BTreeSet<T>;
 
-impl<T: Mutate> Mutate for Mutators<T> {
-    fn mutate(&self, target: &mut Item) {
-        for mutator in self {
-            mutator.mutate(target);
-        }
-    }
-}
-
-impl<T: Ord + core::fmt::Debug> InsertUnique<T> for Mutators<T> {
+impl<T: Ord + Spanned + ToTokens> InsertUnique<T> for Mutators<T> {
     fn insert_unique(&mut self, item: T) -> Result<()> {
-        let err: &str = &format!("Duplicate {:?}", &item);
-
+        let err = Err(error_spanned!("Duplicate argument: {}", &item));
         if !self.insert(item) {
-            return Err(Error::new(
-                Span::call_site(),
-                err
-            ));
+            return err;
         }
 
         Ok(())
@@ -43,7 +32,7 @@ impl<T: Ord + core::fmt::Debug> InsertUnique<T> for Mutators<T> {
 }
 
 trait Mutate {
-    fn mutate(&self, target: &mut Item);
+    fn mutate(self, target: &mut Item);
 }
 
 trait InsertUnique<T> {
@@ -78,22 +67,23 @@ mod macros {
         };
     }
 
-    macro_rules! impl_arg_errors {
-        ($target:ty $(, $variant:pat => $name:expr )+) => {
-            impl core::fmt::Debug for $target {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    match self {
-                        $(
-                            $variant => {
-                                f.debug_tuple($name).finish()
-                            },
-                        )+
-                    }
+    macro_rules! impl_to_tokens_wrapped {
+        ($target:ty: collection) => {
+            impl quote::ToTokens for $target {
+                fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+                    self.0.iter().for_each(| item | item.to_tokens(tokens));
                 }
             }
-        }
+        };
+        ($target:ty) => {
+            impl quote::ToTokens for $target {
+                fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+                    self.0.to_tokens(tokens);
+                }
+            }
+        };
     }
 
     pub(crate) use impl_unique_arg;
-    pub(crate) use impl_arg_errors;
+    pub(crate) use impl_to_tokens_wrapped;
 }
