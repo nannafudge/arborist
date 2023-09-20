@@ -30,11 +30,11 @@ enum SuiteMutator {
 }
 
 impl Mutate for SuiteMutator {
-    fn mutate(self, target: &mut Item) {
+    fn mutate(self, target: &mut Item) -> Result<()> {
         match self {
             SuiteMutator::Setup(arg) => arg.mutate(target),
             SuiteMutator::Teardown(arg) => arg.mutate(target)
-        };
+        }
     }
 }
 
@@ -55,10 +55,12 @@ pub struct TestSuite {
 }
 
 impl Mutate for TestSuite {
-    fn mutate(mut self, target: &mut Item) {
+    fn mutate(mut self, target: &mut Item) -> Result<()> {
         while let Some(mutator) = self.mutators.pop_first() {
-            mutator.mutate(target);
+            mutator.mutate(target)?;
         }
+
+        Ok(())
     }
 }
 
@@ -136,7 +138,9 @@ pub fn render_test_suite(mut test_suite: TestSuite) -> TokenStream {
 
                 if is_test {
                     while let Some(mutator) = test_suite.mutators.pop_first() {
-                        mutator.mutate(item);
+                        if let Err(e) = mutator.mutate(item) {
+                            e.to_compile_error().to_tokens(suite_inner)
+                        }
                     }
                 }
             }

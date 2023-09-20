@@ -22,7 +22,7 @@ type Mutators<T> = BTreeSet<T>;
 
 impl<T: Ord + Spanned + ToTokens> InsertUnique<T> for Mutators<T> {
     fn insert_unique(&mut self, item: T) -> Result<()> {
-        let err = Err(error_spanned!("Duplicate argument: {}", &item));
+        let err = Err(error_spanned!("{} ^ duplicate argument", &item));
         if !self.insert(item) {
             return err;
         }
@@ -32,7 +32,7 @@ impl<T: Ord + Spanned + ToTokens> InsertUnique<T> for Mutators<T> {
 }
 
 trait Mutate {
-    fn mutate(self, target: &mut Item);
+    fn mutate(self, target: &mut Item) -> Result<()>;
 }
 
 trait InsertUnique<T> {

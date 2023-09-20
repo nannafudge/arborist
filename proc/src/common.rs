@@ -119,9 +119,9 @@ pub fn extract_ty_and_where_generics(generics: Option<&Generics>) -> (TokenStrea
 #[macro_use]
 mod macros {
     macro_rules! error_spanned {
-        ($formatter:literal, $item:expr $(, $other_items:expr )?) => {
+        ($formatter:literal, $item:expr $(, $other_items:expr )*) => {
             syn::Error::new(syn::spanned::Spanned::span($item), &format!(
-                $formatter, quote::ToTokens::to_token_stream($item) $(, quote::ToTokens::to_token_stream($other_items))?
+                $formatter, quote::ToTokens::to_token_stream($item) $(, quote::ToTokens::to_token_stream($other_items))*
             ))
         };
     }
