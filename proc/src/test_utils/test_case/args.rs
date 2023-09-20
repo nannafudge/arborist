@@ -1,4 +1,6 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{
+    TokenStream, TokenTree
+};
 use super::{
     Mutate,
     impl_unique_arg,
@@ -14,7 +16,7 @@ use quote::{
 };
 use syn::{
     Ident, Expr, Item, Token,
-    FnArg, ItemFn, Result,
+    FnArg, ItemFn, Result, Stmt,
     parse::{
         Parse, ParseStream
     }
@@ -125,3 +127,44 @@ impl Mutate for ArgWith {
 
 impl_unique_arg!(ArgWith);
 impl_to_tokens_wrapped!(ArgWith: collection);
+
+#[derive(Clone)]
+pub struct ArgVerbatim(pub TokenStream);
+
+impl Parse for ArgVerbatim {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut tokens: TokenStream = TokenStream::new();
+        while let Ok(token) = input.parse::<TokenTree>() {
+            token.to_tokens(&mut tokens);
+        }
+
+        if !input.is_empty() {
+            return Err(input.error("verbatim(): Unexpected token"));
+        }
+
+        Ok(Self(tokens))
+    }
+}
+
+impl Mutate for ArgVerbatim {
+    fn mutate(self, target: &mut Item) {
+        if let Item::Fn(function) = target {
+            for stmt in &mut function.block.stmts {
+                // This could be optimized
+                let tokens = stmt.to_token_stream().to_string();
+                let new_stmt = syn::parse_str::<Stmt>(&tokens.replace("r#verbatim", &self.0.to_string()));
+                match new_stmt {
+                    Ok(parsed) => *stmt = parsed,
+                    Err(e) => panic!("{}", error_spanned!("verbatim(): Error modifying statement {}:\n{}", stmt, &e.to_compile_error()))
+                };
+            }
+
+            return;
+        }
+
+        panic!("{}", error_spanned!("#[test_case]: {} is not a function", target));
+    }
+}
+
+impl_unique_arg!(ArgVerbatim);
+impl_to_tokens_wrapped!(ArgVerbatim);

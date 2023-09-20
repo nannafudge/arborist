@@ -65,6 +65,31 @@ mod macros {
                 }
             }
         };
+        ($target:ident $(< $generic:tt $(, $generics:tt)? >)?, $field:ident $(. $subfields:ident )?) => {
+            impl $(< $generic $(, $generics)? >)? PartialEq for $target $(<$generic $(, $generics)?>)? {
+                fn eq(&self, other: &Self) -> bool {
+                    self.$field $(. $subfields)?.eq(&other.$field $(. $subfields)?)
+                }
+            }
+            
+            impl $(<$generic $(, $generics)?>)? Eq for $target $(<$generic $(, $generics)?>)? {
+
+            }
+
+            impl $(<$generic $(, $generics)?>)? PartialOrd for $target $(<$generic $(, $generics)?>)? {
+                fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+                    self.$field $(. $subfields)?.partial_cmp(&other.$field $(. $subfields)?)
+                }
+            }
+            
+            impl $(<$generic $(, $generics)?>)? Ord for $target $(<$generic $(, $generics)?>)? {
+                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                    self.partial_cmp(other).expect(
+                        stringify!($target, ": Unexpected ord result")
+                    )
+                }
+            }
+        };
     }
 
     macro_rules! impl_to_tokens_wrapped {
@@ -72,6 +97,20 @@ mod macros {
             impl quote::ToTokens for $target {
                 fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
                     self.0.iter().for_each(| item | item.to_tokens(tokens));
+                }
+            }
+        };
+        ($target:ty, $field:ident $(. $subfields:ident )?: collection) => {
+            impl quote::ToTokens for $target {
+                fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+                    self.$field $(. $subfields)?.iter().for_each(| item | item.to_tokens(tokens));
+                }
+            }
+        };
+        ($target:ty, $field:ident $(. $subfields:ident )?) => {
+            impl quote::ToTokens for $target {
+                fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+                    self.$field $(. $subfields)?.to_tokens(tokens);
                 }
             }
         };

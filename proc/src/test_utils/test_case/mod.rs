@@ -30,14 +30,16 @@ use args::*;
 enum TestMutator {
     // Mutators should be defined in the order they must apply
     ArgName(ArgName),
-    ArgWith(ArgWith)
+    ArgWith(ArgWith),
+    ArgVerbatim(ArgVerbatim)
 }
 
 impl Mutate for TestMutator {
     fn mutate(self, target: &mut Item) {
         match self {
             TestMutator::ArgWith(arg) => arg.mutate(target),
-            TestMutator::ArgName(arg) => arg.mutate(target)
+            TestMutator::ArgName(arg) => arg.mutate(target),
+            TestMutator::ArgVerbatim(arg) => arg.mutate(target)
         };
     }
 }
@@ -46,7 +48,8 @@ impl ToTokens for TestMutator {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             TestMutator::ArgWith(arg) => arg.to_tokens(tokens),
-            TestMutator::ArgName(arg) => arg.to_tokens(tokens)
+            TestMutator::ArgName(arg) => arg.to_tokens(tokens),
+            TestMutator::ArgVerbatim(arg) => arg.to_tokens(tokens)
         };
     }
 }
@@ -63,6 +66,9 @@ impl Parse for TestMutator {
         match name.to_string().as_bytes() {
             b"with" => {
                 Ok(TestMutator::ArgWith(parse_arg_parameterized(input)?))
+            },
+            b"verbatim" => {
+                Ok(TestMutator::ArgVerbatim(parse_arg_parameterized(input)?))
             },
             _ => {
                 // Assume the ident is the test name
