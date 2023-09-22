@@ -7,7 +7,6 @@ use syn::{
 };
 
 mod length;
-mod common;
 mod collection;
 mod interpolate;
 
@@ -20,6 +19,26 @@ use length::*;
 
 #[cfg(feature = "test_utils")]
 use test_utils::*;
+
+pub(crate) mod common {
+    use proc_macro2::TokenStream;
+    use quote::ToTokens;
+    use syn::Generics;
+
+    pub fn extract_impl_generics(generics: Option<&Generics>) -> TokenStream {
+        generics.and_then(| generics | {
+            let (impl_generics, _, _) = generics.split_for_impl();
+            Some(impl_generics.to_token_stream())
+        }).unwrap_or_default()
+    }
+    
+    pub fn extract_ty_and_where_generics(generics: Option<&Generics>) -> (TokenStream, TokenStream) {
+        generics.and_then(| generics | {
+            let (_, ty_generics, where_clause) = generics.split_for_impl();
+            Some((ty_generics.to_token_stream(), where_clause.to_token_stream()))
+        }).unwrap_or_default()
+    }
+}
 
 #[proc_macro_attribute]
 pub fn length_method(_: TokenStream, target: TokenStream) -> TokenStream {
@@ -89,23 +108,6 @@ pub fn interpolate(input: TokenStream) -> TokenStream {
     }
 
     out.parse().expect("Invalid template")
-}
-
-#[cfg(feature = "test_utils")]
-#[proc_macro_attribute]
-pub fn test_suite(_: TokenStream, target: TokenStream) -> TokenStream {
-    let test_suite: test_utils::TestSuite = parse_macro_input!(target as test_utils::TestSuite);
-    test_utils::render_test_suite(test_suite).into()
-}
-
-#[cfg(feature = "test_utils")]
-#[proc_macro_attribute]
-pub fn test_case(attr_args: TokenStream, target: TokenStream) -> TokenStream {
-    use syn::ItemFn;
-
-    let test_case: TestCase = parse_macro_input!(attr_args as TestCase);
-    let test_fn: ItemFn = parse_macro_input!(target as ItemFn);
-    render_test_case(test_case, test_fn).into()
 }
 
 #[cfg(feature = "test_utils")]

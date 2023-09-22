@@ -10,9 +10,11 @@ test_utils = []
 default = []
 
 [dependencies]
-syn = { version = "2.0.29", features = ["full", "parsing"] }
-quote = "1.0.33"
 proc-macro2 = "1.0.66"
+quote = "1.0.33"
+
+[dependencies.syn]
+version = "2.0.29"
 
 [lib]
 proc-macro = true
