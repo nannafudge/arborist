@@ -3,15 +3,15 @@
 ################################*/
 #[macro_export]
 macro_rules! unwrap_enum {
-    ($var:expr, $return:expr, $( $subcases:pat ),+) => {
+    ($var:expr, $return:expr, $default:expr, $subcase:pat $(, $subcases:pat )*) => {
         match $var {
-            $($subcases)|+ => $return
+            $subcase $(| $subcases)* => $return,
+            _ => $default
         }
     };
-    ($var:expr, $return:expr, $default:expr, $( $subcases:pat ),+) => {
+    ($var:expr, $return:expr, $subcase:pat $(, $subcases:pat )*) => {
         match $var {
-            $($subcases)|+ => $return,
-            _ => $default
+            $subcase $(|$subcases)* => $return
         }
     };
     ($var:expr, $default:expr, $( $arm:pat => $body:expr ),+) => {

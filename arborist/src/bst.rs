@@ -298,13 +298,18 @@ pub enum BSTWalkerResult {
     Existing(usize)
 }
 
-impl Into<usize> for BSTWalkerResult {
-    fn into(self) -> usize {
-        unwrap_enum!(
-            self,
-            BSTWalkerResult::New(i, side) => i + side as usize,
-            BSTWalkerResult::Existing(i) => i
-        )
+impl From<BSTWalkerResult> for usize {
+    fn from(value: BSTWalkerResult) -> usize {
+        // (Discriminant(0|1), NodeSide(0|1), index)
+        let raw: &(u8, u8, usize) = unsafe {
+            core::mem::transmute::<&BSTWalkerResult, &(u8, u8, usize)>(&value)
+        };
+        
+        // Round the index up/down appropriately, according to the side the match
+        // fell on (Right/Left). Select for such using bitmask based on the Discriminant:
+        // New = 0, Existing = 1. Existing = ignore value as it'll be garbage
+        // (whatever's read from memory at that location)
+        (raw.1 & (1 ^ raw.0)) as usize + raw.2
     }
 }
 

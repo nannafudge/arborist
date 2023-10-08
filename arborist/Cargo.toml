@@ -23,6 +23,7 @@ tinyvec = { workspace = true, optional = true }
 [dev-dependencies]
 arborist-proc = { workspace = true, features = ["test_utils"] }
 rand = { workspace = true, features = ["small_rng"] }
+ctor = "0.2.4"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -1,4 +1,4 @@
-use arborist_proc::{impl_mock, interpolate};
+use arborist_proc::{impl_mock, test_suite, interpolate};
 
 use crate::{
     NodeSide, NodeType,
@@ -36,15 +36,40 @@ macro_rules! assert_length_calls {
     };
 }
 
+/*
+
+    TODO: ADD typed(Type...) TEST ARG
+    i.e.
+
+    fn length<T>()...
+
+    gets transformed into:
+
+    fn length() {
+        fn _length<T>() {
+            T::new()...
+        }
+
+        _length::<Type...>();
+    }
+*/
+
+#[test]
+fn oberman() {
+
+}
+
 macro_rules! impl_tests {
     (length($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
+        type Meme = $tw;
+
         let $($inner_mods)? collection: MockCollection = MockCollection::new(32);
         let _mock_ref: *const MockCollection = &collection as *const MockCollection;
 
         let walker: $tw = <$tw>::new(&$($inner_mods)? collection, 1).unwrap();
 
         assert_eq!(walker.length(), 32);
-        assert_length_calls!($tw, _mock_ref, 1);
+        assert_length_calls!(Meme, _mock_ref, 1);
     };
     // True testing of height() is performed in proptests
     (height($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {

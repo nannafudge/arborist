@@ -1,3 +1,4 @@
+#[macro_use]
 mod common;
 use common::*;
 
@@ -25,41 +26,43 @@ macro_rules! impl_suite {
             },
             #[test]
             fn insert() {
-                for _ in 0..5 {
-                    let mut gen: ArgGen = ArgGen::new();
-                    let mut bst: $bst = <$bst>::new();
-        
-                    impl_tests!{insert(bst, gen, #[args])}
+                test_with_harness!{
+                    for i in 0..5 {
+                        let mut gen: RandomArgs = RandomArgs::new_with_salt(i);
+                        let mut bst: $bst = <$bst>::new();
+
+                        impl_tests!{insert(bst, gen, #[args])}
+                    }
                 }
             }
         
             #[test]
             fn delete() {
-                let mut gen: ArgGen = ArgGen::new();
+                let mut gen: RandomArgs = RandomArgs::new();
                 impl_tests!{delete($bst, gen, #[args])}
             }
         
             #[test]
             fn get() {
-                let mut gen: ArgGen = ArgGen::new();
+                let mut gen: RandomArgs = RandomArgs::new();
                 impl_tests!{get($bst, gen, #[args])}
             }
         
             #[test]
             fn get_mut() {
-                let mut gen: ArgGen = ArgGen::new();
+                let mut gen: RandomArgs = RandomArgs::new();
                 impl_tests!{get_mut($bst, gen, #[args])}
             }
         
             #[test]
             fn contains() {
-                let mut gen: ArgGen = ArgGen::new();
+                let mut gen: RandomArgs = RandomArgs::new();
                 impl_tests!{contains($bst, gen, #[args])}
             }
         
             #[test]
             fn pop() {
-                let mut gen: ArgGen = ArgGen::new();
+                let mut gen: RandomArgs = RandomArgs::new();
                 impl_tests!{pop($bst, gen, #[args])}
             }
         }
@@ -71,7 +74,7 @@ macro_rules! impl_tests {
         {
             let mut bst: $bst = <$bst>::new();
             for _ in 1..BST_SIZE {
-                $arg_gen.gen();
+                $arg_gen.next();
                 assert_eq!(bst.insert($($args ,)? $arg), Ok(None));
             }
 
@@ -80,7 +83,7 @@ macro_rules! impl_tests {
     };
     (insert($bst:ident, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {
         for _ in 1..BST_SIZE {
-            $arg_gen.gen();
+            $arg_gen.next();
             assert_eq!($bst.insert($($args ,)? $arg), Ok(None));
             assert_eq!($bst.insert($($args ,)? $arg), Ok(Some($arg)));
         }
@@ -96,7 +99,7 @@ macro_rules! impl_tests {
     (insert_const($bst:ident, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {
         impl_tests!{insert($bst, $arg_gen, $arg $(, $args)?)};
 
-        $arg_gen.gen();
+        $arg_gen.next();
         assert_eq!($bst.insert($($args ,)? $arg), Err(BSTError::Inner(FenwickTreeError::Full)));
     };
     (delete($bst:ty, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {
@@ -105,7 +108,7 @@ macro_rules! impl_tests {
         $arg_gen.reset();
 
         for _ in 1..BST_SIZE {
-            $arg_gen.gen();
+            $arg_gen.next();
             assert_eq!(bst.delete(&$arg), Ok($arg));
         }
 
@@ -119,12 +122,12 @@ macro_rules! impl_tests {
         $arg_gen.reset();
 
         for _ in 1..BST_SIZE {
-            $arg_gen.gen();
+            $arg_gen.next();
             assert_eq!(bst.contains(&$arg), Ok(true));
         }
 
         assert_eq!(bst.contains(&0), Ok(false));
-        $arg_gen.gen();
+        $arg_gen.next();
         assert_eq!(bst.contains(&$arg), Ok(false));
     };
     (pop($bst:ty, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {
@@ -143,12 +146,12 @@ macro_rules! impl_tests {
         $arg_gen.reset();
 
         for _ in 1..BST_SIZE {
-            $arg_gen.gen();
+            $arg_gen.next();
             assert_eq!(bst.$fn_ident(&$arg), Ok(&$($mut)? $arg));
         }
 
         assert_eq!(bst.$fn_ident(&0), Err(BSTError::KeyNotFound));
-        $arg_gen.gen();
+        $arg_gen.next();
         assert_eq!(bst.$fn_ident(&$arg), Err(BSTError::KeyNotFound));
     };
     (get($bst:ty, $arg_gen:ident, $arg:expr $(, $args:expr)?)) => {

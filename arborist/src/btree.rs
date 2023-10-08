@@ -3,7 +3,7 @@ use arborist_core::fenwick::{
     Length, InsertableCollection,
     IndexedCollection, IndexedCollectionMut,
     StatefulTreeView, FenwickTreeError,
-    root
+    root, StatefulTreeViewMut
 };
 use arborist_core::{
     TreeRead, TreeReadMut, TreeWrite,
@@ -18,7 +18,7 @@ use core::ops::{
     Deref, DerefMut
 };
 
-const DEFAULT_BALANCE_FACTOR: u8 = 8;
+const MAX_ELEMENTS: usize = 16;
 
 #[cfg(feature = "bumpalo_vec")]
 pub mod bumpalo_vec {
@@ -41,10 +41,10 @@ pub mod std_vec {
 #[cfg(feature = "const_vec")]
 pub mod const_vec {
     use tinyvec::ArrayVec;
-    use super::{BTree, NodeKV, DEFAULT_BALANCE_FACTOR};
+    use super::{BTree, NodeKV, MAX_ELEMENTS};
 
-    pub type BTreeSetConst<T, const B: usize = {DEFAULT_BALANCE_FACTOR as usize}> = BTree<ArrayVec<[T; B]>>;
-    pub type BTreeMapConst<'t, K, V, const B: usize = {DEFAULT_BALANCE_FACTOR as usize}> = BTree<ArrayVec<[NodeKV<'t, K, V>; B]>>;
+    pub type BTreeSetConst<T> = BTree<ArrayVec<[T; MAX_ELEMENTS]>>;
+    pub type BTreeMapConst<'t, K, V> = BTree<ArrayVec<[NodeKV<'t, K, V>; MAX_ELEMENTS]>>;
 }
 
 pub mod btreemap {
@@ -75,34 +75,39 @@ pub mod btreeset {
     pub use super::const_vec::BTreeSetConst;
 }
 
+pub enum BTreeNode<'t, T> {
+    Layer(&'t BTreeNode<'t, T>),
+    Node(T)
+}
+
 #[derive(Length)]
 #[length_method(self.length)]
 pub struct BTree<C: InsertableCollection> {
-    pub(crate) inner: C,
-    balance_factor: u8,
+    pub(crate) root_tree: BST<C>,
     length: usize
 }
 
-impl<C, I> BTree<C> where
-    C: InsertableCollection<Output = BST<I>>,
+impl<'t, C, I> BTree<C> where
+    C: InsertableCollection<Output = BTreeNode<'t, BST<I>>>,
     C::Output: PartialOrd + Sized,
-    I::Output: PartialOrd<C::Output> + Sized,
+    I: InsertableCollection + 't,
+    I::Output: Sized,
     BST<C>: From<C>
 {
     pub fn new() -> Self {
         // BST Collections *always* allocate at least 1 slot
         Self {
-            inner: BST::from(C::new()),
-            balance_factor: DEFAULT_BALANCE_FACTOR,
+            root_tree: BST::from(C::new()),
             length: 0
         }
     }
 }
 
-impl<C, I> TreeRead for BTree<C> where
-    C: InsertableCollection<Output = BST<I>>,
+impl<'t, C, I> TreeRead for BTree<C> where
+    C: InsertableCollection<Output = BTreeNode<'t, BST<I>>>,
     C::Output: PartialOrd + Sized,
-    I::Output: PartialOrd<C::Output> + Sized,
+    I: InsertableCollection + 't,
+    I::Output: PartialOrd<C::Output> + Sized
 {
     type Node = I::Output;
     type Error = BTreeError;
@@ -128,10 +133,11 @@ impl<C, I> TreeRead for BTree<C> where
     }
 }
 
-impl<C, I> TreeReadMut for BTree<C> where
-    C: InsertableCollection<Output = BST<I>>,
+impl<'t, C, I> TreeReadMut for BTree<C> where
+    C: InsertableCollection<Output = BTreeNode<'t, BST<I>>>,
     C::Output: PartialOrd + Sized,
-    I::Output: PartialOrd<C::Output> + Sized,
+    I: InsertableCollection + 't,
+    I::Output: PartialOrd<C::Output> + Sized
 {
     fn get_mut(&mut self, node: &Self::Node) -> Result<&mut Self::Node, Self::Error> {
         todo!()
@@ -150,27 +156,26 @@ impl<C, I> TreeReadMut for BTree<C> where
     }
 }
 
-impl<C, I> TreeWrite for BTree<C> where
-    C: InsertableCollection<Output = BST<I>>,
+impl<'t, C, I> TreeWrite for BTree<C> where
+    C: InsertableCollection<Output = BTreeNode<'t, BST<I>>>,
     C::Output: PartialOrd + Sized,
-    I::Output: PartialOrd<C::Output> + Sized,
+    I: InsertableCollection + 't,
+    I::Output: PartialOrd<C::Output> + Sized
 {
     fn insert(&mut self, node: Self::Node) -> Result<Option<Self::Node>, Self::Error> {
-        let subtree_index: usize = unwrap_enum!(
-            self.inner.allocate(&node)?,
-            BSTWalkerResult::Existing(index) => index,
-            BSTWalkerResult::New(index) => {
-                
-                index
-            }
-        );
+        let mut subtree_index: usize = usize::from(self.root_tree.allocate(&node)?).max(self.length());
 
-        let subtree: C = self.inner.inner_mut()
+        //let mut subtree: &mut BST<I> = &mut self.inner.inner_mut()[subtree_index];
+        //if subtree.length() < MAX_ELEMENTS {
+            //return Ok(BST::<I>::insert(subtree, node)?);
+        //}
 
-        self.inner[subtree_index].insert(&node);
-        self.length += 1;
+        //let new_right_subtree: I = subtree.inner_mut().split_off(subtree.height());
+        //self.inner.inner_mut().insert(subtree_index + 1, new_right_subtree);
+        //self.length += 1;
 
-        todo!()
+        //self.rebalance(subtree_index, subtree_index + 1)?;
+        Ok(None)
     }
 
     fn delete(&mut self, node: &Self::Node) -> Result<Self::Node, Self::Error> {
@@ -180,6 +185,15 @@ impl<C, I> TreeWrite for BTree<C> where
     fn pop(&mut self) -> Result<Self::Node, Self::Error> {
         todo!()
     }
+}
+
+pub type BTreeWalker<'w, C> = BSTWalker<'w, C>;
+
+impl<'w, C> BTreeWalker<'w, C> where
+    C: IndexedCollection,
+    C::Output: PartialOrd + Sized
+{
+    
 }
 
 /*impl<C> PartialEq for BST<C> where
@@ -197,8 +211,7 @@ impl<I> PartialEq<I::Output> for BST<I> where
     I::Output: PartialEq
 {
     fn eq(&self, other: &I::Output) -> bool {
-        // length() should ALWAYS return 1 as all trees require at least 1 slot free
-        other.eq(&self.inner[self.inner.length() - 1])
+        self.length() == 0 || other.eq(&self.inner[self.inner.length()])
     }
 }
 
@@ -207,94 +220,17 @@ impl<I> PartialOrd<I::Output> for BST<I> where
     I::Output: PartialOrd
 {
     fn partial_cmp(&self, other: &I::Output) -> Option<std::cmp::Ordering> {
-        // length() should ALWAYS return 1 as all trees require at least 1 slot free
-        other.partial_cmp(&self.inner[self.inner.length() - 1])
-    }
-}
-
-impl<C> Deref for BST<C> where C: Length {
-    type Target = C;
-
-    fn deref(&self) -> &Self::Target {
-        &(self.inner)
-    }
-}
-
-impl<C> DerefMut for BST<C> where C: Length {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut(self.inner)
-    }
-}
-
-impl<'w, C> BSTWalker<'w, C> where
-    C: IndexedCollection,
-    C::Output: PartialOrd + Sized
-{
-    pub fn new(inner: &'w C) -> Result<Self, BSTError> {
-        // Start at centermost point of tree
-        let start_index: usize = root(&inner.height());
-
-        Ok(Self {
-            view: StatefulTreeView::new(inner, start_index)?
-        })
-    }
-
-    pub fn allocate(&mut self, key: &impl PartialOrd<C::Output>) -> BSTWalkerResult {
-        while self.view.lsb() > 1 {
-            unwrap_enum!(
-                self.view.current(),
-                self.view.traverse(Direction::Down(NodeSide::Left)),
-                Ok(node) => {
-                    match key.partial_cmp(node) {
-                        Some(Ordering::Greater) => {
-                            self.view.traverse(Direction::Down(NodeSide::Right));
-                        },
-                        Some(Ordering::Less) => {
-                            self.view.traverse(Direction::Down(NodeSide::Left));
-                        },
-                        Some(Ordering::Equal) => {
-                            return BSTWalkerResult::Existing(self.view.index());
-                        },
-                        None => panic!("Invariant: PartialCmp failed to return a value")
-                    }
-                }
-            );
+        let length: usize = self.length();
+        if length == 0 {
+            return None;
         }
-        
-        unwrap_enum!(
-            self.view.current(),
-            BSTWalkerResult::New(self.view.index()),
-            Ok(node) => {
-                match key.partial_cmp(node) {
-                    Some(Ordering::Greater) => {
-                        BSTWalkerResult::New(self.view.index() + 1)
-                    },
-                    Some(Ordering::Less) => {
-                        BSTWalkerResult::New(self.view.index())
-                    },
-                    Some(Ordering::Equal) => {
-                        BSTWalkerResult::Existing(self.view.index())
-                    },
-                    _ => panic!("Invariant: PartialCmp failed to return a value")
-                }
-            }
-        )
-    }
 
-    pub fn find(&mut self, key: &impl PartialOrd<C::Output>) -> Result<usize, BSTError> {
-        match self.allocate(key) {
-            BSTWalkerResult::Existing(index) => Ok(index),
-            BSTWalkerResult::New(_) => Err(BSTError::KeyNotFound)
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.view.seek(root(&self.view.height()))
+        other.partial_cmp(&self.inner[length])
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum BTreeError {
+pub enum BTreeError {
     Inner(BSTError)
 }
 
