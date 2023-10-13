@@ -22,7 +22,7 @@ fn mock_collection() -> TokenStream {
     quote!{
         use core::cell::RefCell;
 
-        #[derive(Debug)]
+        #[derive(Debug, PartialEq)]
         pub struct MockCollection {
             len: usize,
             length_calls: RefCell<usize>
@@ -38,14 +38,14 @@ fn mock_collection() -> TokenStream {
         impl core::ops::Index<usize> for MockCollection {
             type Output = usize;
 
-            fn index(&self, _: usize) -> &Self::Output {
-                &self.len
+            fn index(&self, i: usize) -> &Self::Output {
+                &i
             }
         }
 
         impl core::ops::IndexMut<usize> for MockCollection {
-            fn index_mut(&mut self, _: usize) -> &mut Self::Output {
-                &mut self.len
+            fn index_mut(&mut self, i: usize) -> &mut Self::Output {
+                &mut i
             }
         }
 

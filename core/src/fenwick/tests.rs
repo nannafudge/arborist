@@ -1,17 +1,136 @@
-use arborist_proc::{impl_mock, test_suite, interpolate};
+use arborist_proc::{impl_mock, interpolate};
+use sith::test_suite;
 
-use crate::{
-    NodeSide, NodeType,
-    TreeWalker, TreeWalkerMut
-};
-use crate::fenwick::{
-    VirtualTreeView, StatefulTreeView, StatefulTreeViewMut,
-    IndexView, Direction, Length, FenwickTreeError, lsb,
-    traits::*
-};
+use crate::*;
+use crate::fenwick::*;
 
 impl_mock!(MockCollection);
 
+macro_rules! esc {
+    ($($tokens:tt)*) => {
+        $($tokens)*
+    };
+}
+
+#[test_suite]
+mod auxiliary {
+    use super::*;
+    use sith::test_case;
+
+    #[test_case]
+    fn lsb_accepts_zero() {
+        assert_eq!(lsb(0), 0);
+    }
+
+    #[test_case(index_zero, with(0, 0, 0))]
+    #[test_case(index_one, with(1, 1, 1))]
+    #[test_case(index_two, with(2, 2, 2))]
+    #[test_case(index_twelve, with(12, 12, 4))]
+    fn indexview_new(index: usize, expected_index: usize, expected_lsb: usize) {
+        let view = IndexView::new(index);
+        assert_eq!(view.index, expected_index);
+        assert_eq!(view.lsb, expected_lsb);
+    }
+
+    #[test_case(add, with(IndexView::new(2), verbatim(+), 4))]
+    #[test_case(sub, with(IndexView::new(2), verbatim(-), 0))]
+    #[test_case(bit_or, with(IndexView::new(2), verbatim(|), 2))]
+    #[test_case(bit_and, with(IndexView::new(2), verbatim(&), 2))]
+    #[test_case(bit_xor, with(IndexView::new(2), verbatim(^), 0))]
+    fn indexview(view: IndexView, r#op: _, expected: usize) {
+        assert_eq!(view r#op 2, r#expected);
+    }
+
+    #[test_case(add, with(IndexView::new(2), verbatim(+=), 4))]
+    #[test_case(sub, with(IndexView::new(2), verbatim(-=), 0))]
+    #[test_case(bit_or, with(IndexView::new(2), verbatim(|=), 2))]
+    #[test_case(bit_and, with(IndexView::new(2), verbatim(&=), 2))]
+    #[test_case(bit_xor, with(IndexView::new(2), verbatim(^=), 0))]
+    fn indexview_assign(mut view: IndexView, r#op: _, expected: usize) {
+        esc!(view r#op 2);
+
+        assert_eq!(view.index, expected);
+        assert_eq!(view.lsb, expected);
+    }
+
+    #[test_case]
+    fn nodeside_conversion() {
+        /*        4 <--------> 12
+               2 <-----> 6
+            1 <-> 3   5 <-> 7
+        */
+        assert_eq!(NodeSide::from(&IndexView::new(1)), NodeSide::Left);
+        assert_eq!(NodeSide::from(&IndexView::new(2)), NodeSide::Left);
+        assert_eq!(NodeSide::from(&IndexView::new(3)), NodeSide::Right);
+        assert_eq!(NodeSide::from(&IndexView::new(4)), NodeSide::Left);
+        assert_eq!(NodeSide::from(&IndexView::new(5)), NodeSide::Left);
+        assert_eq!(NodeSide::from(&IndexView::new(6)), NodeSide::Right);
+        assert_eq!(NodeSide::from(&IndexView::new(7)), NodeSide::Right);
+        assert_eq!(NodeSide::from(&IndexView::new(8)), NodeSide::Left);
+    }
+    
+    #[test_case]
+    fn nodetype_conversion() {
+        /*        4 <--------> 12
+               2 <-----> 6
+            1 <-> 3   5 <-> 7
+        */
+        assert_eq!(NodeType::from(&IndexView::new(1)), NodeType::Leaf);
+        assert_eq!(NodeType::from(&IndexView::new(2)), NodeType::Node);
+        assert_eq!(NodeType::from(&IndexView::new(3)), NodeType::Leaf);
+        assert_eq!(NodeType::from(&IndexView::new(4)), NodeType::Node);
+        assert_eq!(NodeType::from(&IndexView::new(5)), NodeType::Leaf);
+        assert_eq!(NodeType::from(&IndexView::new(6)), NodeType::Node);
+        assert_eq!(NodeType::from(&IndexView::new(7)), NodeType::Leaf);
+        assert_eq!(NodeType::from(&IndexView::new(8)), NodeType::Node);
+    }
+}
+
+#[test_suite]
+mod walkers {
+    use super::*;
+    use sith::test_case;
+
+    #[test_case(virtual_view, with(verbatim(VirtualTreeView), verbatim()))]
+    #[test_case(stateful_view, with(verbatim(StatefulTreeView<MockCollection>), verbatim()))]
+    #[test_case(stateful_view_mut, with(verbatim(StatefulTreeViewMut<MockCollection>), verbatim(mut)))]
+    fn new_errors_on_zero_index(r#walker: _, r#mut: _) {
+        assert_eq!(
+            esc!(<r#walker>::new(&r#mut MockCollection::new(32), 0)),
+            Err(FenwickTreeError::OutOfBounds { index: 0, length: 32 })
+        );
+    }
+
+    #[test_case(virtual_view, with(MockCollection::new(32), verbatim(VirtualTreeView), verbatim()))]
+    #[test_case(stateful_view, with(MockCollection::new(32), verbatim(StatefulTreeView<MockCollection>), verbatim()))]
+    #[test_case(stateful_view_mut, with(mut MockCollection::new(32), verbatim(StatefulTreeViewMut<MockCollection>), verbatim(mut)))]
+    fn new_calls_length(inner: MockCollection, r#walker: _, r#mut: _) {
+        let inner_handle = &inner as *const MockCollection;
+
+        assert!(<r#walker>::new(&r#mut inner, 1).is_ok());
+        assert_eq!(MockCollection::length_calls(inner_handle), 1);
+    }
+
+    #[test_case(virtual_view, with(MockCollection::new(32), verbatim(VirtualTreeView), verbatim()))]
+    #[test_case(stateful_view, with(MockCollection::new(32), verbatim(StatefulTreeView<MockCollection>), verbatim()))]
+    #[test_case(stateful_view_mut, with(mut MockCollection::new(32), verbatim(StatefulTreeViewMut<MockCollection>), verbatim(mut)))]
+    fn new(inner: MockCollection, r#walker: _, r#mut: _) {
+        for i in 1..16 {
+            let walker = esc!(<r#walker>::new(&r#mut inner, i).unwrap());
+            assert_eq!(walker.curr, IndexView { index: i, lsb: lsb(i) });
+        }
+    }
+
+    #[test_case(virtual_view, with(verbatim(VirtualTreeView), verbatim()))]
+    #[test_case(stateful_view, with(verbatim(StatefulTreeView<MockCollection>), verbatim()))]
+    #[test_case(stateful_view_mut, with(verbatim(StatefulTreeViewMut<MockCollection>), verbatim(mut)))]
+    fn peek(r#walker: _, r#mut: _) {
+        let walker = esc!(<r#walker>::new(&r#mut MockCollection::new(32), 1).unwrap());
+        //assert_eq!(walker.peek(Direction::Left), )
+    }
+}
+
+/*
 // I really should make this interpolate library less shit to use...
 // aka. actually implement boolean logic
 macro_rules! assert_length_calls {
@@ -53,11 +172,6 @@ macro_rules! assert_length_calls {
         _length::<Type...>();
     }
 */
-
-#[test]
-fn oberman() {
-
-}
 
 macro_rules! impl_tests {
     (length($fn_ident:ident, $tw:ty) $(collection = $inner_mods:tt)? $(modifiers = $ref:tt$($mut:tt)?)?) => {
@@ -477,4 +591,4 @@ mod aux_functions {
             );
         }
     }
-}
+}*/

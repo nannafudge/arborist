@@ -234,9 +234,9 @@ pub trait TreeWalker<'w> {
     fn traverse(&'w mut self, direction: Direction);
     fn seek(&'w mut self, path: Self::Path);
     fn reset(&'w mut self);
-    
-    fn type_(&'w self) -> NodeType;
-    fn side(&'w self) -> NodeSide;
+
+    fn node_type(&'w self) -> NodeType;
+    fn node_side(&'w self) -> NodeSide;
 }
 
 pub trait TreeWalkerMut<'w>: TreeWalker<'w> {
@@ -249,6 +249,7 @@ pub trait TreeWalkerMut<'w>: TreeWalker<'w> {
     fn sibling_mut(&'w mut self) -> Result<Self::OutputMut, Self::Error>;
 }
 
+#[repr(u8)]
 pub enum Direction {
     Up,
     Down(NodeSide),

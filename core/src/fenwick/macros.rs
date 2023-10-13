@@ -22,22 +22,20 @@ macro_rules! impl_op_assign {
 }
 
 macro_rules! safe_tree_index {
-    // wrap_ret for VirtualTreeWalker
-    (virtual($self:tt, $index:expr)) => {
+    (@bounds($self:tt, $index:expr)) => {
         require!(
             $index > 0 && $index < $self.length(),
             FenwickTreeError::OutOfBounds{index: $index, length: $self.length()}
         );
-
+    };
+    // wrap_ret for VirtualTreeWalker
+    (virtual($self:tt, $index:expr)) => {
+        safe_tree_index!(@bounds($self, $index));
         return Ok($index);
     };
     // wrap_ret for StatefulTreeWalkers
     (stateful($self:tt, $index:expr $(, $mut:tt)?)) => {
-        require!(
-            $index > 0 && $index < $self.collection.length(),
-            FenwickTreeError::OutOfBounds{index: $index, length: $self.collection.length()}
-        );
-
+        safe_tree_index!(@bounds($self, $index));
         return Ok(& $($mut)? $self.collection[$index]);
     };
 }
@@ -138,11 +136,11 @@ macro_rules! impl_walker {
             self.curr.index = self.length();
         }
 
-        fn type_(&self) -> NodeType {
+        fn node_type(&self) -> NodeType {
             NodeType::from(&self.curr)
         }
 
-        fn side(&self) -> NodeSide {
+        fn node_side(&self) -> NodeSide {
             NodeSide::from(&self.curr)
         }
     };

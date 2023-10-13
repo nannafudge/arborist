@@ -22,8 +22,9 @@ tinyvec = { workspace = true, optional = true }
 criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
-arborist-proc = { workspace = true, features = ["test_utils"]  }
+sith = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
+arborist-proc = { workspace = true, features = ["test_utils"]  }
 lazy_static = "1.4.0"
 
 [lib]

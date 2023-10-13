@@ -7,4 +7,5 @@ tinyvec = { version = "1.6.0" }
 bumpalo = { version = "3.14.0" }
 arborist-core = { version = "0.1.0", path = "core" }
 arborist-proc = { version = "0.1.0", path = "proc" }
+sith = { version = "0.1.0", git = "https://github.com/nannafudge/sith.git", branch = "main" }
 criterion = { version = "0.5.1" }
