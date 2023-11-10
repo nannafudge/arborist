@@ -21,10 +21,12 @@ pub fn get_mock(name: Ident) -> TokenStream {
 fn mock_collection() -> TokenStream {
     quote!{
         use core::cell::RefCell;
+        use core::ops::{Deref, DerefMut};
 
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, Clone, PartialEq)]
         pub struct MockCollection {
             len: usize,
+            idx: RefCell<usize>,
             length_calls: RefCell<usize>
         }
 
@@ -39,20 +41,26 @@ fn mock_collection() -> TokenStream {
             type Output = usize;
 
             fn index(&self, i: usize) -> &Self::Output {
-                &i
+                unsafe {
+                    *self.idx.as_ptr() = i;
+                    core::mem::transmute::<&usize, &usize>(self.idx.borrow().deref())
+                }
             }
         }
 
         impl core::ops::IndexMut<usize> for MockCollection {
-            fn index_mut(&mut self, i: usize) -> &mut Self::Output {
-                &mut i
+            fn index_mut(&mut self, mut i: usize) -> &mut Self::Output {
+                unsafe {
+                    *self.idx.as_ptr() = i;
+                    core::mem::transmute::<&mut usize, &mut usize>(self.idx.borrow_mut().deref_mut())
+                }
             }
         }
 
         #[allow(dead_code)]
         impl MockCollection {
             pub fn new(len: usize) -> Self {
-                Self { len, length_calls: RefCell::new(0) }
+                Self { len, length_calls: RefCell::new(0), idx: RefCell::new(0) }
             }
 
             pub fn set_length(collection: *mut MockCollection, length: usize) {
